@@ -66,7 +66,7 @@ const ITEMS = [
   { id: "suanmeitang", cat: "drink", name: "酸梅汤", price: 5, unit: "碗", desc: "乌梅山楂，生津止渴" },
 ];
 
-const INITIAL_MORA = 0;
+const INITIAL_MORA = 100; // 新用户起步资金（此前为 0，装好什么都买不起）
 const DAILY_BASE_MORA = 10;
 
 const ENTERTAINMENT_TASKS = [
