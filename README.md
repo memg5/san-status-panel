@@ -26,17 +26,24 @@
 
 ## 📦 安装
 
-1. 克隆/下载本仓库到 Hana 的插件目录：
+**方式一：下载 zip（推荐，最简单）**
 
-   ```bash
-   git clone https://github.com/你的用户名/san-status-panel.git ~/.hanako/plugins/san-status-panel
+1. 在仓库页面点击 **Code → Download ZIP**，或从 [Releases](https://github.com/memg5/san-status-panel/releases) 下载最新版 `san-status-panel-vX.X.X.zip`。
+2. 解压到 Hana 的插件目录：
+
+   ```
+   ~/.hanako/plugins/san-status-panel/
    ```
 
-   或手动把 `san-status-panel` 文件夹放进 Hana 插件目录。
+   （Windows 路径示例：`C:\Users\你的用户名\.hanako\plugins\san-status-panel\`）
 
-2. 重启 Hana，在设置中启用「桑多涅 · 状态面板」。
+3. 重启 Hana，在设置中启用「桑多涅 · 状态面板」。
 
-3. 侧边栏/面板中即可看到状态卡片；猫猫生活区入口在插件页面列表。
+**方式二：git clone**
+
+```bash
+git clone https://github.com/memg5/san-status-panel.git ~/.hanako/plugins/san-status-panel
+```
 
 > 数据存储于 Hana 的插件数据目录（`plugin-data/san-status-panel/`），与源码隔离，卸载插件不影响已存数据。
 

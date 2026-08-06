@@ -618,8 +618,16 @@ function initLocation() {
     }
     locStatus.textContent = "请求定位权限…";
     locateBtn.disabled = true;
+    // 兜底超时：Electron 主进程未开放权限时，getCurrentPosition 可能既不回调成功也不回调失败（静默吞掉），
+    // 此时 6 秒后主动判定为"暂不可用"，避免按钮永远卡在"请求中"。
+    var silentTimer = setTimeout(function () {
+      locStatus.textContent = "定位暂不可用（宿主应用未开放定位权限）";
+      locateBtn.disabled = false;
+    }, 6000);
+    var finish = function () { clearTimeout(silentTimer); };
     navigator.geolocation.getCurrentPosition(
       function (pos) {
+        finish();
         var lat = pos.coords.latitude;
         var lon = pos.coords.longitude;
         var acc = pos.coords.accuracy;
@@ -644,10 +652,11 @@ function initLocation() {
           .catch(function () { saveLoc(locInfo, locStatus, locateBtn); });
       },
       function (err) {
-        var msg = "定位失败";
-        if (err.code === 1) msg = "权限被拒绝";
-        else if (err.code === 2) msg = "位置不可用";
-        else if (err.code === 3) msg = "定位超时";
+        finish();
+        var msg = "定位暂不可用";
+        if (err.code === 1) msg = "定位暂不可用（权限被拒绝）";
+        else if (err.code === 2) msg = "定位暂不可用（位置信息不可用）";
+        else if (err.code === 3) msg = "定位暂不可用（定位超时）";
         locStatus.textContent = msg;
         locateBtn.disabled = false;
       },
