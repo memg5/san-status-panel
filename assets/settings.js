@@ -219,9 +219,9 @@ function loadSessions() {
    ============================================================ */
 var savedBgConfig = { image: null, posX: 50, posY: 50, scale: 120 };
 var savedAvatarConfig = { image: null, posX: 50, posY: 50, scale: 120 };
-var tempBgConfig = { image: null, posX: 50, posY: 50, scale: 120 };
-var tempAvatarConfig = { image: null, posX: 50, posY: 50, scale: 120 };
+var tempBgConfig = { image: null, posX: 50, posY: 50, scale: 120, aspect: null };
 
+var tempAvatarConfig = { image: null, posX: 50, posY: 50, scale: 120, aspect: null };
 // --- 应用背景 / 头像到面板 ---
 function applyBgToPanel(config) {
   var bg = document.getElementById("panelBg");
@@ -266,16 +266,22 @@ function applyAvatarPreview(config) {
 // 拖拽采用 Pointer Events + setPointerCapture：
 // 1. 监听器只在首次 initDrag 时注册一次（防重复监听导致抖动画错）
 // 2. setPointerCapture 让拖拽期间指针事件始终指向预览框（移出边界不丢事件）
-// 3. 背景百分比定位语义：offset = (pw - iw) * posX/100，可动范围 total = |pw - iw|
-//    posX 增大 → 露图片右侧 → 内容视觉向左移。因此拖右（dx>0）要让内容右移 → posX 减小。
-//    公式：posX = (offset - min) / total * 100，offset = baseOffset + dx（拖右 offset 增大）
-//    —— offset 增大对映 posX 增大？不对：当图大于框，offset 范围 [-(iw-pw), 0]，min=-(iw-pw)
-//    offset=-min 时 posX=0，offset=0 时 posX=100。拖右 offset 向 0 走 → posX 增大 → 露右 → 内容左移。
-//    这跟直觉相反。正确做法：拖右应该让 offset 减小（内容右移 = 露左 = posX 减小）。
-//    所以 dx 取反：offset = baseOffset - dx。
+// 3. 百分比定位语义：offset = (pw - iw) * posX/100，可动范围 total = |pw - iw|
+//    拖拽 1:1 跟随鼠标：拖右（dx>0）→ 图片内容视觉右移（offset 增大，方向由分母符号自动处理）
+// 4. 纵向尺寸按图片真实宽高比计算：background-size 只按框宽缩放，图片高度 = 宽度 / 宽高比
+//    （不按框高百分比算，否则非等比图片的纵向可动范围与实际渲染不符）
 var dragState = null; // { previewEl, configRef, updateCallback, startX, startY, baseOffX, baseOffY }
-// 动态灵敏度：让“鼠标拖满行程”的距离恒定（FULL_DRAG_PX），X/Y 各自按可动范围算系数
-var FULL_DRAG_PX = 120;
+
+function imageSizeAt(config, pw, ph) {
+  var iw = pw * (config.scale / 100);
+  var ih;
+  if (config.aspect && config.aspect > 0) {
+    ih = iw / config.aspect; // 图片真实高度
+  } else {
+    ih = ph * (config.scale / 100); // 未知比例时退化为按框等比
+  }
+  return { iw: iw, ih: ih };
+}
 
 function onDragMove(e) {
   if (!dragState) return;
@@ -283,14 +289,11 @@ function onDragMove(e) {
   var r = s.previewEl.getBoundingClientRect();
   var pw = r.width, ph = r.height;
   if (pw <= 0 || ph <= 0) return;
-  var iw = pw * (s.configRef.scale / 100), ih = ph * (s.configRef.scale / 100);
+  var size = imageSizeAt(s.configRef, pw, ph);
+  var iw = size.iw, ih = size.ih;
   var rawDx = e.clientX - s.startX, rawDy = e.clientY - s.startY;
-  var minX = Math.min(0, pw - iw), maxX = Math.max(0, pw - iw);
-  var minY = Math.min(0, ph - ih), maxY = Math.max(0, ph - ih);
-  var totalX = Math.abs(pw - iw), totalY = Math.abs(ph - ih);
-  var sensX = totalX > 0 ? totalX / FULL_DRAG_PX : 0;
-  var sensY = totalY > 0 ? totalY / FULL_DRAG_PX : 0;
-  var dx = rawDx * sensX, dy = rawDy * sensY;
+  // 2px 死区：避免点击时轻微抖动误移图片
+  if (Math.abs(rawDx) < 2 && Math.abs(rawDy) < 2) return;
   // === 关键：CSS background-position 的真实数学 ===
   // background-position: X% → 图片偏移 offset = (pw - iw) * X/100
   // 拖拽目标：拖右(dx>0) → 图片内容视觉右移
@@ -298,13 +301,15 @@ function onDragMove(e) {
   // 图小(分母>0)：内容右移 = 图片右移 = posX 增大 → offset = (正)×(大) → offset 增大 → base + dx
   // 两种情况的 offset 都是增大 → 统一 off_new = base + dx！
   // 反解：posX = offX / (pw - iw) * 100（不能用 (off-min)/total——图大时 min<0 会方向反）
-  if (totalX > 0 && pw !== iw) {
-    var offX = s.baseOffX + dx;
+  var minX = Math.min(0, pw - iw), maxX = Math.max(0, pw - iw);
+  var minY = Math.min(0, ph - ih), maxY = Math.max(0, ph - ih);
+  if (iw !== pw) {
+    var offX = s.baseOffX + rawDx;
     offX = Math.max(minX, Math.min(maxX, offX));
     s.configRef.posX = (offX / (pw - iw)) * 100;
   }
-  if (totalY > 0 && ph !== ih) {
-    var offY = s.baseOffY + dy;
+  if (ih !== ph) {
+    var offY = s.baseOffY + rawDy;
     offY = Math.max(minY, Math.min(maxY, offY));
     s.configRef.posY = (offY / (ph - ih)) * 100;
   }
@@ -323,11 +328,12 @@ function initDrag(previewEl, configRef, updateCallback) {
   if (!previewEl) return;
   previewEl.addEventListener("pointerdown", function (e) {
     if (e.button !== undefined && e.button !== 0) return;
-    if (dragState) return;
+    dragState = null; // 清除可能残留的拖拽状态（指针在窗口外释放等情况）
     e.preventDefault();
     var r = previewEl.getBoundingClientRect();
     var pw = r.width, ph = r.height;
-    var iw = pw * (configRef.scale / 100), ih = ph * (configRef.scale / 100);
+    var size = imageSizeAt(configRef, pw, ph);
+    var iw = size.iw, ih = size.ih;
     // 锁定按下时的基准 offset（图片左上角相对框左上角）
     dragState = {
       previewEl: previewEl,
@@ -347,6 +353,17 @@ function initDrag(previewEl, configRef, updateCallback) {
     window.addEventListener("pointerup", onDragUp);
     window.addEventListener("pointercancel", onDragUp);
   }
+}
+
+// 读取图片真实宽高比（background-size 按宽度缩放后，高度由图片比例决定）
+function loadImageAspect(src, config) {
+  var img = new Image();
+  img.onload = function () {
+    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+      config.aspect = img.naturalWidth / img.naturalHeight;
+    }
+  };
+  img.src = src;
 }
 
 function initWheelZoom(previewEl, configRef, sliderEl, valueEl, updateCallback, min, max) {
@@ -393,6 +410,7 @@ function uploadBg() {
     var reader = new FileReader();
     reader.onload = function (e) {
       Object.assign(tempBgConfig, { image: e.target.result, posX: 50, posY: 50, scale: 120 });
+      loadImageAspect(e.target.result, tempBgConfig);
       applyBgPreview(tempBgConfig);
       document.getElementById("bgScaleSlider").value = 120;
       document.getElementById("bgScaleValue").textContent = "120%";
@@ -418,6 +436,7 @@ document.getElementById("bgReselect").onchange = function (e) {
   var reader = new FileReader();
   reader.onload = function (ev) {
     Object.assign(tempBgConfig, { image: ev.target.result, posX: 50, posY: 50, scale: 120 });
+    loadImageAspect(ev.target.result, tempBgConfig);
     applyBgPreview(tempBgConfig);
     document.getElementById("bgScaleSlider").value = 120;
     document.getElementById("bgScaleValue").textContent = "120%";
@@ -461,6 +480,7 @@ function uploadAvatar() {
     var reader = new FileReader();
     reader.onload = function (e) {
       Object.assign(tempAvatarConfig, { image: e.target.result, posX: 50, posY: 50, scale: 120 });
+      loadImageAspect(e.target.result, tempAvatarConfig);
       applyAvatarPreview(tempAvatarConfig);
       document.getElementById("avatarScaleSlider").value = 120;
       document.getElementById("avatarScaleValue").textContent = "120%";
@@ -484,6 +504,7 @@ document.getElementById("avatarReselect").onchange = function (e) {
   var reader = new FileReader();
   reader.onload = function (ev) {
     Object.assign(tempAvatarConfig, { image: ev.target.result, posX: 50, posY: 50, scale: 120 });
+    loadImageAspect(ev.target.result, tempAvatarConfig);
     applyAvatarPreview(tempAvatarConfig);
     document.getElementById("avatarScaleSlider").value = 120;
     document.getElementById("avatarScaleValue").textContent = "120%";
