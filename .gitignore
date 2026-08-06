@@ -1,5 +1,11 @@
 # 依赖
-node_modules/
+# node_modules/  → 注意：Hana 插件需要自带 @hana SDK 包，故不能整目录排除
+node_modules/*
+!node_modules/@hana/
+node_modules/@hana/*
+!node_modules/@hana/plugin-runtime/
+!node_modules/@hana/plugin-sdk/
+!node_modules/@hana/plugin-protocol/
 
 # 运行时数据（Hana 插件数据目录，勿提交）
 plugin-data/
