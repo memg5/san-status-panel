@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学习玩耍室</title>
+<style>/* INLINE_CSS */</style>
+</head>
+<body>
+
+<div class="play-wrapper">
+
+  <div class="bg-pattern" aria-hidden="true"></div>
+
+  <div class="play-card">
+    <!-- 返回按钮 -->
+    <button class="play-back" id="playBackBtn" aria-label="返回">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+
+    <!-- Header -->
+    <div class="play-header">
+      <svg class="play-gear" width="26" height="26" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+        <circle cx="14" cy="14" r="6" fill="#C4952E" opacity="0.9"/>
+        <circle cx="14" cy="14" r="3" fill="#FEFCE8"/>
+        <path d="M14 2v4M14 22v4M2 14h4M22 14h4M5.5 5.5l2.8 2.8M19.7 19.7l2.8 2.8M5.5 22.5l2.8-2.8M19.7 8.3l2.8-2.8" stroke="#C4952E" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="14" cy="14" r="10" stroke="#6FAAD4" stroke-width="1.2" stroke-dasharray="3 2" fill="none" opacity="0.5"/>
+      </svg>
+      <div class="play-title">
+        学习玩耍室
+        <small>(ᐡ⦁⩊⦁⸝⸝ᐡ )₊୭</small>
+      </div>
+      <svg class="play-gear-rev" width="26" height="26" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+        <circle cx="14" cy="14" r="6" fill="#C4952E" opacity="0.9"/>
+        <circle cx="14" cy="14" r="3" fill="#FEFCE8"/>
+        <path d="M14 2v4M14 22v4M2 14h4M22 14h4M5.5 5.5l2.8 2.8M19.7 19.7l2.8 2.8M5.5 22.5l2.8-2.8M19.7 8.3l2.8-2.8" stroke="#C4952E" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="14" cy="14" r="10" stroke="#C8313C" stroke-width="1.2" stroke-dasharray="3 2" fill="none" opacity="0.4"/>
+      </svg>
+    </div>
+
+    <!-- Divider -->
+    <div class="play-divider">
+      <span></span>
+      <svg width="18" height="18" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3" fill="none" stroke="#6FAAD4" stroke-width="1.5"/><circle cx="8" cy="8" r="1.2" fill="#6FAAD4"/></svg>
+      <svg width="22" height="22" viewBox="0 0 20 20"><circle cx="10" cy="10" r="4.5" fill="none" stroke="#C4952E" stroke-width="1.5"/><path d="M10 2v3M10 15v3M2 10h3M15 10h3" stroke="#C4952E" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="10" r="1.5" fill="#C4952E"/></svg>
+      <svg width="18" height="18" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3" fill="none" stroke="#C8313C" stroke-width="1.5"/><circle cx="8" cy="8" r="1.2" fill="#C8313C"/></svg>
+      <span></span>
+    </div>
+
+    <!-- Status -->
+    <div class="play-body">
+      <div class="play-status-row">
+        <div class="play-status-item">
+          <div class="play-status-label">摩拉</div>
+          <div class="play-status-val mora" id="moraDisplay">
+            <span class="play-mora-icon"></span>128
+          </div>
+        </div>
+        <div class="play-status-item">
+          <div class="play-status-label">学习天数</div>
+          <div class="play-status-val" id="studyDisplay">3</div>
+        </div>
+        <div class="play-status-item">
+          <div class="play-status-label">进行中</div>
+          <div class="play-status-val" id="taskDisplay" style="font-size:13px;font-weight:600;color:var(--sky-500);letter-spacing:0.5px;">空闲</div>
+        </div>
+      </div>
+
+      <!-- Buttons -->
+      <div class="play-actions">
+        <button class="play-btn play-btn-study" id="btnStudy">
+          <svg class="play-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          开始学习
+        </button>
+        <div class="play-earn-wrap">
+          <button class="play-btn play-btn-earn" id="btnEarn">
+            <svg class="play-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 8.5c-.5-1.5-2-2.5-4-2.5s-3.5 1-4 2.5"/><path d="M12 6v12"/><path d="M8 14v2"/><path d="M16 14v2"/></svg>
+            开始赚钱
+            <svg class="play-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7;width:16px;height:16px"><polyline points="6 15 12 9 18 15"/></svg>
+          </button>
+          <div class="play-task-menu" id="taskMenu">
+            <div class="play-task-item" data-task="repair-shop">
+              <div class="play-task-emoji">🔧</div>
+              <div class="play-task-info">
+                <span class="play-task-name">维修店上班</span>
+                <span class="play-task-meta">2小时 · 等待审批</span>
+              </div>
+              <div class="play-task-reward">80</div>
+            </div>
+            <div class="play-task-item" data-task="fish-river">
+              <div class="play-task-emoji">🎣</div>
+              <div class="play-task-info">
+                <span class="play-task-name">小河边钓鱼</span>
+                <span class="play-task-meta">1小时 · 闲暇悠哉</span>
+              </div>
+              <div class="play-task-reward">40</div>
+            </div>
+            <div class="play-task-item" data-task="farm-tomato">
+              <div class="play-task-emoji">🍅</div>
+              <div class="play-task-info">
+                <span class="play-task-name">农场收货番茄</span>
+                <span class="play-task-meta">1.5小时 · 田园田间</span>
+              </div>
+              <div class="play-task-reward">48</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="play-footer">
+      <span>— 致制造无用之物的人偶工坊 —</span>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="play-toast" id="toast"></div>
+
+</div>
+
+<script>/* INLINE_JS */</script>
+</body>
+</html>

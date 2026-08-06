@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学习手账</title>
+<style>/* INLINE_CSS */</style>
+</head>
+<body>
+
+<div class="bs-wrapper">
+
+  <div class="bg-pattern" aria-hidden="true"></div>
+
+  <!-- ====== 顶栏 ====== -->
+  <header class="bs-header">
+    <button class="bs-back" id="bsBack" aria-label="返回">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <div class="bs-brand">
+      <svg class="bs-gear" width="24" height="24" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+        <circle cx="14" cy="14" r="6" fill="#C4952E" opacity="0.9"/>
+        <circle cx="14" cy="14" r="3" fill="#FEFCE8"/>
+        <path d="M14 2v4M14 22v4M2 14h4M22 14h4M5.5 5.5l2.8 2.8M19.7 19.7l2.8 2.8M5.5 22.5l2.8-2.8M19.7 8.3l2.8-2.8" stroke="#C4952E" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+      <span class="bs-title">学习手账</span>
+      <small>Study Notebook</small>
+    </div>
+    <div class="bs-balance">
+      <span class="bs-coin"></span>
+      <span id="bsMora">--</span>
+    </div>
+  </header>
+
+  <!-- ====== 书页 ====== -->
+  <main class="bs-book" id="bsBook">
+
+    <!-- 书签指示 -->
+    <div class="bs-tabs" aria-hidden="true">
+      <span class="bs-tab-dot" data-page="0"></span>
+      <span class="bs-tab-dot" data-page="1"></span>
+      <span class="bs-tab-dot" data-page="2"></span>
+    </div>
+
+    <!-- ══════ 第 1 页 · 目标书写 ══════ -->
+    <section class="bs-page" data-page="0">
+      <div class="bs-page-head">
+        <span class="bs-page-num">壹</span>
+        <h2>写下今日目标</h2>
+        <p class="bs-page-sub">逐字书写，如同在纸上落笔</p>
+      </div>
+
+      <div class="bs-lines" id="bsLines">
+        <div class="bs-line-row">
+          <input class="bs-line-input" id="bsGoalInput" maxlength="60" placeholder="今天想完成什么？">
+        </div>
+      </div>
+
+      <div class="bs-goal-cards" id="bsGoalCards"></div>
+
+      <div class="bs-page-actions">
+        <button class="bs-btn bs-btn-ghost" id="bsPinGoal">📌 钉住这条</button>
+        <button class="bs-btn bs-btn-primary" id="bsNext1" disabled>完成 → 翻页</button>
+      </div>
+    </section>
+
+    <!-- ══════ 第 2 页 · 方法选择 ══════ -->
+    <section class="bs-page" data-page="1">
+      <div class="bs-page-head">
+        <span class="bs-page-num">贰</span>
+        <h2>选择学习方法</h2>
+        <p class="bs-page-sub">为刚才的目标选一个学习法</p>
+      </div>
+
+      <div class="bs-methods" id="bsMethods">
+        <button class="bs-method" data-method="pomodoro">
+          <span class="bs-method-icon">🍅</span>
+          <span class="bs-method-name">番茄钟</span>
+          <span class="bs-method-desc">25 分钟专注 + 5 分钟休息</span>
+        </button>
+        <button class="bs-method" data-method="feynman">
+          <span class="bs-method-icon">✍️</span>
+          <span class="bs-method-name">费曼学习</span>
+          <span class="bs-method-desc">讲给小白听，找出卡点</span>
+        </button>
+        <button class="bs-method" data-method="ebbinghaus">
+          <span class="bs-method-icon">🕐</span>
+          <span class="bs-method-name">艾宾浩斯</span>
+          <span class="bs-method-desc">间隔重复，对抗遗忘</span>
+        </button>
+      </div>
+
+      <div class="bs-timer-set">
+        <div class="bs-timer-label">专注时长</div>
+        <div class="bs-timer-ctrl">
+          <button class="bs-timer-btn" id="bsTimeMinus">−</button>
+          <span class="bs-timer-val" id="bsTimeVal">25</span>
+          <span class="bs-timer-unit">分钟</span>
+          <button class="bs-timer-btn" id="bsTimePlus">＋</button>
+        </div>
+        <label class="bs-toggle">
+          <input type="checkbox" id="bsRemind" checked>
+          <span class="bs-toggle-track"></span>
+          <span class="bs-toggle-label">时间到提醒</span>
+        </label>
+      </div>
+
+      <div class="bs-page-actions">
+        <button class="bs-btn bs-btn-ghost" id="bsPrev1">← 返回</button>
+        <button class="bs-btn bs-btn-primary" id="bsNext2">开始 → 翻页</button>
+      </div>
+    </section>
+
+    <!-- ══════ 第 3 页 · 计时 / 问答 ══════ -->
+    <section class="bs-page" data-page="2">
+      <div class="bs-page-head">
+        <span class="bs-page-num">叁</span>
+        <h2 id="bsStageTitle">专注计时</h2>
+        <p class="bs-page-sub" id="bsStageSub">保持专注，时间到会自动提醒</p>
+      </div>
+
+      <!-- 计时状态 -->
+      <div class="bs-timer-stage" id="bsTimerStage">
+        <div class="bs-clock" id="bsClock">25:00</div>
+        <div class="bs-progress"><div class="bs-progress-bar" id="bsProgressBar"></div></div>
+        <button class="bs-btn bs-btn-danger" id="bsStopTimer">结束学习</button>
+      </div>
+
+      <!-- 问答状态 -->
+      <div class="bs-q-stage" id="bsQStage" style="display:none">
+        <div class="bs-q-list" id="bsQList"></div>
+        <div class="bs-q-done" id="bsQDone" style="display:none">
+          <div class="bs-q-summary">
+            <div class="bs-q-reward">完成学习</div>
+            <div class="bs-q-mora" id="bsQMora">+7 摩拉</div>
+            <div class="bs-q-note">AI 评判功能待开放，先记录一下这次的学习感受吧</div>
+          </div>
+          <button class="bs-btn bs-btn-primary" id="bsQFinish">收工 → 回到第 1 页</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Toast -->
+  <div class="bs-toast" id="bsToast"></div>
+
+</div>
+
+<script>/* INLINE_JS */</script>
+</body>
+</html>

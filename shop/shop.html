@@ -1,0 +1,139 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>猫猫生活区</title>
+<style>/* INLINE_CSS */</style>
+</head>
+<body>
+
+<div class="shop-app">
+
+  <!-- ====== 桌面纹理层 ====== -->
+  <div class="desk-tex" aria-hidden="true"></div>
+
+  <!-- ====== 桌面飘落草叶装饰 ====== -->
+  <div class="desk-deco" aria-hidden="true">
+    <span class="deco-leaf" style="left:6%;animation-delay:0s;">🍃</span>
+    <span class="deco-leaf" style="left:22%;animation-delay:3s;">✦</span>
+    <span class="deco-leaf" style="left:42%;animation-delay:6s;">🍃</span>
+    <span class="deco-leaf" style="left:62%;animation-delay:2s;">✿</span>
+    <span class="deco-leaf" style="left:78%;animation-delay:9s;">🍃</span>
+    <span class="deco-leaf" style="left:90%;animation-delay:4s;">✦</span>
+    <span class="deco-leaf" style="left:14%;animation-delay:11s;">✿</span>
+    <span class="deco-leaf" style="left:55%;animation-delay:7s;">🍃</span>
+  </div>
+
+  <div class="workbench">
+
+    <!-- ====== 顶部便签（日记卡） ====== -->
+    <section class="paper note-card" id="noteCard">
+      <div class="tape tape-l"></div>
+      <div class="tape tape-r"></div>
+      <div class="note-body">
+        <div class="note-date" id="noteDate">7月28日 · 多云</div>
+        <div class="note-text" id="noteText">今天进货的水蜜桃甜到心里了，猫猫们都要来尝一口。</div>
+        <div class="note-sig">— 桑多涅 —</div>
+      </div>
+      <div class="note-photo">
+        <div class="note-photo-tape"></div>
+        <div class="note-photo-img" style="background-image:url('/* SANPIC */')"></div>
+      </div>
+    </section>
+
+    <!-- ====== 钱包（摩拉余额，合并进玩耍区） ====== -->
+    <!-- 摩拉余额在玩耍区右上角 -->
+
+    <!-- ====== 学习区（书桌角） ====== -->
+    <section class="paper study-card" id="studyCard">
+      <div class="study-head">
+        <div class="section-title">📖 学习区</div>
+        <div class="study-streak" id="studyStreak">连续 0 天</div>
+      </div>
+      <div class="study-body">
+        <div class="timer-stage">
+          <svg class="timer-ring" viewBox="0 0 220 220">
+            <defs>
+              <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#9CC082"/>
+                <stop offset="100%" stop-color="#5E8448"/>
+              </linearGradient>
+            </defs>
+            <circle class="ring-bg" cx="110" cy="110" r="92"/>
+            <circle class="ring-progress" id="ringProgress" cx="110" cy="110" r="92"/>
+          </svg>
+          <div class="timer-face">
+            <div class="timer-time" id="timerTime">25:00</div>
+            <div class="timer-label" id="timerLabel">准备开始</div>
+          </div>
+          <div class="timer-quote" id="timerQuote">想好学什么了吗？我陪你。</div>
+        </div>
+        <div class="study-panel">
+          <div class="study-tiers" id="studyTiers">
+            <button class="tier-btn" data-tier="15">15分钟</button>
+            <button class="tier-btn" data-tier="25">25分钟</button>
+            <button class="tier-btn" data-tier="40">40分钟</button>
+            <button class="tier-btn" data-tier="60">60分钟</button>
+          </div>
+          <div class="study-status" id="studyStatus">空闲 · 25分钟 +10摩拉</div>
+          <button class="paper-btn" id="studyStartBtn">开始学习</button>
+          <button class="paper-btn ghost" id="studyClaimBtn" style="display:none">领取学习收入</button>
+          <div class="study-total" id="studyTotal">累计学习 0 分钟</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== 账本（桑多涅的行动流水账） ====== -->
+    <section class="paper ledger-card" id="ledgerCard">
+      <div class="ledger-head">
+        <span class="ledger-title">她的账本</span>
+      </div>
+      <div class="ledger-items" id="ledgerItems">
+        <div class="ledger-empty">账本还是空的…</div>
+      </div>
+    </section>
+
+    <!-- ====== 玩耍区（多任务）+ 摩拉余额 ====== -->
+    <section class="paper play-card" id="playCard">
+      <div class="play-head">
+        <div class="section-title">🎣 玩耍区</div>
+        <div class="play-mora">
+          <span class="play-mora-amt" id="moraCount">--</span>
+          <span class="play-mora-unit">摩拉</span>
+        </div>
+      </div>
+      <div class="play-tasks" id="playTasks"></div>
+      <div class="play-status" id="playStatus">空闲中</div>
+    </section>
+
+    <!-- ====== 页脚签名 ====== -->
+    <div class="signature">
+      <span class="sig-line"></span>
+      <span class="sig-text">— 致住在猫猫生活区的人们 —</span>
+      <span class="sig-line"></span>
+    </div>
+
+  </div>
+
+  <!-- ====== Toast ====== -->
+  <div class="toast" id="toast"></div>
+
+  <!-- ====== 任务二次确认 ====== -->
+  <div class="confirm-mask" id="confirmMask">
+    <div class="confirm-dialog" role="dialog" aria-modal="true">
+      <div class="confirm-title" id="confirmTitle">确认开始？</div>
+      <div class="confirm-desc" id="confirmDesc"></div>
+      <div class="confirm-actions">
+        <button class="confirm-btn ghost" id="confirmCancel">再想想</button>
+        <button class="confirm-btn ok" id="confirmOk">出发！</button>
+      </div>
+    </div>
+  </div>
+
+
+</div>
+
+<script>/* INLINE_JS */</script>
+</body>
+</html>

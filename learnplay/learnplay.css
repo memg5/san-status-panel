@@ -1,0 +1,369 @@
+/* ================================================================
+   学习玩耍室 — play.css
+   设计系统: 继承 shop.css 的 token + 新增 play 专属样式
+   ================================================================ */
+
+/* ── Design Tokens (from shop.css) ── */
+:root {
+  --sky-50:  #F0F6FB;
+  --sky-100: #DFEDF7;
+  --sky-200: #BFD9EE;
+  --sky-400: #6FAAD4;
+  --sky-500: #5090C0;
+  --sky-600: #3D779E;
+
+  --brass-50:  #FEFCE8;
+  --brass-100: #FEF9C3;
+  --brass-400: #D4A853;
+  --brass-500: #C4952E;
+  --brass-600: #A67C23;
+
+  --crimson-100: #FBE5E6;
+  --crimson-400: #D44A52;
+  --crimson-500: #C8313C;
+
+  --bg-page:    #F8FAFC;
+  --bg-card:    #FFFFFF;
+
+  --ink-900: #0F172A;
+  --ink-700: #1E293B;
+  --ink-500: #475569;
+  --ink-400: #64748B;
+
+  --border-card:  #E2E8F0;
+  --shadow-sm:   0 1px 2px rgba(15,23,42,0.04);
+  --shadow-card: 0 1px 3px rgba(15,23,42,0.06), 0 4px 12px rgba(15,23,42,0.04);
+  --shadow-badge: 0 2px 10px rgba(74,111,165,0.28);
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+html, body {
+  width:100%; min-height:100dvh;
+  font-size: 16px !important;       /* 防止 Hana 主题覆盖字号 */
+  background: var(--bg-page);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  color: var(--ink-700);
+  line-height: 1.5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+/* ── Background Pattern ── */
+.bg-pattern {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.04;
+  background-image:
+    radial-gradient(circle at 15% 20%, var(--sky-400) 1.2px, transparent 1.2px),
+    radial-gradient(circle at 85% 30%, var(--brass-400) 1px, transparent 1px),
+    radial-gradient(circle at 25% 70%, var(--crimson-400) 1px, transparent 1px),
+    radial-gradient(circle at 75% 80%, var(--brass-400) 1px, transparent 1px),
+    radial-gradient(circle at 50% 50%, var(--sky-400) 1.5px, transparent 1.5px);
+  background-size: 120px 120px, 160px 160px, 140px 140px, 180px 180px, 200px 200px;
+}
+
+/* ── Wrapper ── */
+.play-wrapper {
+  position: relative;
+  z-index: 5;
+  width: 100%;
+  max-width: 420px;
+}
+
+/* ── Card ── */
+.play-card {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  position: relative;
+}
+
+.play-back {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px; height: 34px;
+  background: rgba(255,255,255,0.85);
+  border: 1px solid var(--border-card);
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 10;
+  color: var(--ink-500);
+  transition: all 0.2s var(--ease-out);
+  box-shadow: var(--shadow-sm);
+}
+.play-back:hover {
+  background: var(--bg-card);
+  border-color: var(--sky-200);
+  color: var(--sky-500);
+}
+.play-back:active { transform: scale(0.96); }
+
+/* ── Header ── */
+.play-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 22px 24px 0;
+  margin-bottom: 16px;
+}
+
+.play-gear { flex-shrink: 0; animation: gearSpin 12s linear infinite; }
+.play-gear-rev { flex-shrink: 0; animation: gearSpinRev 10s linear infinite; }
+
+@keyframes gearSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes gearSpinRev { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+
+.play-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink-900);
+  letter-spacing: 1px;
+  text-align: center;
+  flex: 1;
+}
+.play-title small {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--brass-500);
+  letter-spacing: 1.5px;
+  margin-top: 1px;
+}
+
+/* ── Divider ── */
+.play-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 24px 16px;
+}
+.play-divider span {
+  display: block;
+  height: 1px;
+  flex: 1;
+  background: linear-gradient(90deg, transparent, var(--border-card), transparent);
+}
+.play-divider svg { flex-shrink: 0; opacity: 0.5; }
+
+/* ── Body ── */
+.play-body { padding: 0 24px 20px; }
+
+/* ── Status Row ── */
+.play-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: linear-gradient(150deg, var(--sky-50) 0%, #FDFCF5 60%, var(--crimson-100) 100%);
+  border-radius: var(--radius-md);
+  margin-bottom: 14px;
+}
+.play-status-item { text-align: center; flex: 1; }
+.play-status-item + .play-status-item { border-left: 1px solid var(--border-card); }
+.play-status-label {
+  font-size: 11px;
+  color: var(--ink-400);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+.play-status-val {
+  font-size: 18px;
+  font-weight: 750;
+  color: var(--ink-900);
+  font-variant-numeric: tabular-nums;
+}
+.play-status-val.mora { color: var(--brass-600); }
+
+/* ── Mora Coin Icon ── */
+.play-mora-icon {
+  display: inline-block;
+  width: 18px; height: 18px;
+  background: linear-gradient(135deg, #FEF3C7, #FCD34D 30%, #D4A853 65%, #B8860B);
+  border-radius: 50%;
+  border: 1px solid rgba(168,120,30,0.35);
+  box-shadow: inset 0 1px 2px rgba(255,255,255,0.7), 0 1px 3px rgba(196,149,46,0.25);
+  vertical-align: middle;
+  margin-right: 3px;
+}
+
+/* ── Action Buttons ── */
+.play-actions { display: flex; flex-direction: column; gap: 10px; }
+
+.play-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 0;
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 1px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.play-btn-study {
+  background: linear-gradient(135deg, var(--sky-400), var(--sky-500));
+  color: #FFF;
+  border-color: var(--sky-500);
+  box-shadow: 0 2px 10px rgba(74, 111, 165, 0.25);
+}
+.play-btn-study:hover {
+  background: linear-gradient(135deg, var(--sky-500), var(--sky-600));
+  transform: translateY(-2px);
+  box-shadow: 0 4px 18px rgba(74, 111, 165, 0.35);
+}
+.play-btn-study:active { transform: scale(0.98); }
+
+.play-btn-earn {
+  background: linear-gradient(135deg, var(--brass-400), var(--brass-500));
+  color: #FFF;
+  border-color: var(--brass-500);
+  box-shadow: 0 2px 10px rgba(196, 149, 46, 0.25);
+}
+.play-btn-earn:hover {
+  background: linear-gradient(135deg, var(--brass-500), var(--brass-600));
+  transform: translateY(-2px);
+  box-shadow: 0 4px 18px rgba(196, 149, 46, 0.35);
+}
+.play-btn-earn:active { transform: scale(0.98); }
+
+.play-btn-icon { width: 22px; height: 22px; flex-shrink: 0; }
+
+/* ── Task Selection Menu ── */
+.play-earn-wrap { position: relative; }
+
+.play-task-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 28px rgba(15,23,42,0.15);
+  padding: 6px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px) scale(0.97);
+  transition: all 0.2s var(--ease-out);
+  z-index: 20;
+}
+.play-task-menu.show { opacity: 1; visibility: visible; transform: translateY(0) scale(1); }
+
+.play-task-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  user-select: none;
+}
+.play-task-item:hover { background: linear-gradient(135deg, var(--brass-50), var(--brass-100)); }
+.play-task-item:active { transform: scale(0.98); }
+.play-task-item + .play-task-item { border-top: 1px solid var(--border-card); }
+
+.play-task-emoji {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--brass-50), var(--brass-100));
+  border-radius: 8px;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.play-task-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.play-task-name { font-size: 13px; font-weight: 650; color: var(--ink-700); }
+.play-task-meta { font-size: 11px; color: var(--ink-400); letter-spacing: 0.3px; }
+.play-task-reward {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brass-600);
+  font-variant-numeric: tabular-nums;
+}
+.play-task-reward .play-mora-icon { width: 12px; height: 12px; margin-right: 0; }
+
+/* ── Footer ── */
+.play-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 24px 20px;
+  opacity: 0.5;
+}
+.play-footer span {
+  font-size: 11px;
+  color: var(--ink-400);
+  letter-spacing: 2px;
+  font-style: italic;
+}
+
+/* ── Toast ── */
+.play-toast {
+  position: fixed;
+  left: 50%; bottom: 32px;
+  transform: translateX(-50%) translateY(16px);
+  padding: 12px 28px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #FFF;
+  background: #0F172A;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(255,255,255,0.1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.3s var(--ease-out);
+  z-index: 100;
+  box-shadow: 0 8px 28px rgba(15,23,42,0.16);
+}
+.play-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.play-toast.warn { background: var(--crimson-500); }
+
+/* ── Responsive ── */
+@media (max-width: 480px) {
+  .play-wrapper { max-width: 100%; margin: 0; }
+  .play-header { padding: 18px 16px 0; }
+  .play-body { padding: 0 16px 16px; }
+  .play-divider { margin: 0 16px 12px; }
+  .play-status-val { font-size: 16px; }
+  .play-btn { padding: 14px 0; font-size: 14px; }
+}
+
+/* ── Reduced Motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .play-gear, .play-gear-rev { animation: none !important; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

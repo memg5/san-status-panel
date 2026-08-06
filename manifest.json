@@ -1,0 +1,34 @@
+{
+  "manifestVersion": 1,
+  "id": "san-status-panel",
+  "name": "桑多涅 · 状态面板",
+  "version": "0.4.0",
+  "description": "桑多涅角色状态面板。支持自定义头像/背景、会话切换、互动反馈，模块化架构便于维护。",
+  "author": "桑多涅 · 枫丹工坊",
+  "minAppVersion": "0.159.0",
+  "trust": "full-access",
+  "activationEvents": [
+    "onStartup"
+  ],
+  "main": "index.js",
+  "ui": {
+    "hostCapabilities": [
+      "clipboard.writeText"
+    ]
+  },
+  "contributes": {
+    "widget": {
+      "title": "桑多涅 · 状态",
+      "icon": "<svg viewBox=\"0 0 24 24\"><text x=\"12\" y=\"17\" text-anchor=\"middle\" font-size=\"16\" fill=\"currentColor\" font-weight=\"600\">桑</text></svg>",
+      "route": "/widget"
+    },
+    "page": {
+      "title": "猫猫生活区",
+      "route": "/shop",
+      "icon": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z\"/><path d=\"M3 6h18\"/><path d=\"M16 10a4 4 0 0 1-8 0\"/></svg>"
+    },
+    "tools": [
+      "./tools/update-status.js"
+    ]
+  }
+}

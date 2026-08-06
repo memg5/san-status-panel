@@ -1,0 +1,612 @@
+/* ============================================================
+   san-status-panel — 桑多涅 · 状态面板 样式表
+   v0.3.0 — 模块化版本
+   ============================================================ */
+
+/* ---------- Google Fonts ---------- */
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600&display=swap");
+
+/* ============================================================
+   1. Reset & CSS 变量
+   ============================================================ */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --card-opacity: 0.65;
+  --glass-bg: rgba(255, 255, 255, var(--card-opacity));
+  --glass-border: 1px solid rgba(255, 255, 255, 0.5);
+  --text-primary: #4A4A5A;
+  --text-secondary: #7A7A9A;
+  --text-accent: #6b5b95;
+  --online-green: #81C784;
+  --btn-gradient-start: #FFB6B0;
+  --btn-gradient-end: #CDAEF0;
+  --divider: #E5E5EB;
+  --radius-pill: 24px;
+  --radius-lg: 20px;
+  --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+/* ============================================================
+   2. Body & 主面板布局
+   ============================================================ */
+body {
+  background: #ECE6F0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 0;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+.panel {
+  width: 100%;
+  height: 100vh;
+  max-width: 460px;
+  position: relative;
+  overflow: hidden;
+  color: var(--text-primary);
+}
+
+.panel-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 214, 224, 0.6), rgba(212, 197, 240, 0.5), rgba(184, 228, 240, 0.6));
+  z-index: 0;
+}
+.panel-bg.has-image {
+  background-size: cover;
+  background-position: center;
+}
+
+.panel-content {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+/* ============================================================
+   3. 顶栏 (Header Bar)
+   ============================================================ */
+.header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--divider);
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.status-tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.status-tag {
+  background: rgba(255, 255, 255, 0.7);
+  padding: 3px 10px;
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-accent);
+  border: 1px solid rgba(180, 160, 220, 0.4);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--online-green);
+  box-shadow: 0 0 6px rgba(129, 199, 132, 0.5);
+}
+
+/* ============================================================
+   4. 设置按钮 (流光动画)
+   ============================================================ */
+.settings-btn-wrap {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.settings-btn-wrap::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: linear-gradient(45deg, #c7b8ea, #ffb6c1, #c7b8ea, #a084dc);
+  background-size: 300%;
+  z-index: -1;
+  animation: fg 3s ease infinite;
+  opacity: 0.8;
+  filter: blur(2px);
+}
+@keyframes fg {
+  0%   { background-position: 0 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+.settings-btn {
+  background: rgba(255, 255, 255, 0.7);
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--text-primary);
+  transition: var(--transition);
+}
+.settings-btn:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: rotate(30deg);
+}
+
+/* ============================================================
+   5. 头像 & 名称区域
+   ============================================================ */
+.avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+}
+.hide-avatar .avatar-circle { display: none; }
+.hide-name .panel-title    { display: none; }
+
+.avatar-circle {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #E8D5F5, #F5E0E0) center/cover;
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 4px 14px rgba(180, 160, 210, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.avatar-circle:hover { transform: scale(1.05); }
+
+.panel-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-accent);
+  letter-spacing: 1px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(200, 180, 220, 0.3);
+  cursor: pointer;
+}
+.panel-title-input {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-accent);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--text-accent);
+  text-align: center;
+  outline: none;
+  width: 120px;
+}
+
+/* ============================================================
+   6. 玻璃卡片 (Glass Card) & 状态行
+   ============================================================ */
+.glass-card {
+  background: var(--glass-bg);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.03);
+  border: var(--glass-border);
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 14px;
+}
+.label { color: var(--text-secondary); }
+.val   { font-weight: 600; color: var(--text-primary); }
+.ok    { text-align: center; font-size: 11px; color: var(--text-secondary); margin-top: 6px; }
+
+.memory-card { display: block; }
+
+/* ============================================================
+   7. 底部操作栏 (Action Bar)
+   ============================================================ */
+.action-bar {
+  display: flex;
+  height: 46px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(to right, var(--btn-gradient-start), var(--btn-gradient-end));
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(205, 174, 240, 0.3);
+  margin-top: auto;
+}
+.action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFF;
+  font-weight: 500;
+  cursor: pointer;
+  font-size: 13px;
+  border: none;
+  background: transparent;
+}
+.action-btn:hover { background: rgba(255, 255, 255, 0.15); }
+.action-divider {
+  width: 1px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* ============================================================
+   8. 遮罩层 & 设置面板 (Settings Panel)
+   ============================================================ */
+.panel-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 10;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s;
+}
+.panel-overlay.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.settings-panel {
+  position: absolute;
+  top: 52px;
+  left: 12px;
+  right: 12px;
+  width: auto;
+  max-width: 440px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+  z-index: 11;
+  overflow: hidden;
+  transform: translateY(-8px) scale(0.96);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.25s;
+  border: 1px solid rgba(200, 180, 220, 0.4);
+  max-height: calc(100vh - 70px);
+  display: flex;
+  flex-direction: column;
+}
+.settings-panel.show {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  visibility: visible;
+}
+
+.sp-header {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(200, 180, 220, 0.25);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-accent);
+}
+.sp-close {
+  cursor: pointer;
+  font-size: 16px;
+  color: #9a8aba;
+}
+.sp-body {
+  flex: 1;
+  overflow-y: auto;
+}
+.sp-group {
+  border-bottom: 1px solid rgba(200, 180, 220, 0.2);
+}
+.sp-ttl {
+  padding: 10px 14px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #9a8aba;
+  letter-spacing: 0.5px;
+}
+
+/* ============================================================
+   9. 会话选择列表
+   ============================================================ */
+.ag-hd {
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #5a4a7a;
+}
+.ag-hd:hover { background: rgba(240, 235, 250, 0.6); }
+.ag-hd .fold {
+  font-size: 11px;
+  color: #9a8aba;
+  display: inline-block;
+  width: 12px;
+  transition: transform 0.2s;
+}
+.collapsed .fold { transform: rotate(-90deg); }
+
+.session-list {
+  max-height: 140px;
+  overflow-y: auto;
+  transition: max-height 0.25s;
+}
+.collapsed .session-list {
+  max-height: 0;
+  overflow: hidden;
+}
+.session-item {
+  padding: 7px 14px 7px 30px;
+  font-size: 13px;
+  color: #5a5a7a;
+  cursor: pointer;
+}
+.session-item:hover { background: rgba(200, 180, 220, 0.2); }
+.session-item.active {
+  background: rgba(199, 184, 234, 0.3);
+  color: var(--text-accent);
+  font-weight: 500;
+}
+
+/* ============================================================
+   10. 设置项 (Setting Items)
+   ============================================================ */
+.setting-item {
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.setting-item:hover { background: rgba(240, 235, 250, 0.4); }
+
+.color-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  display: inline-block;
+  margin: 4px;
+  transition: all 0.2s;
+}
+.color-dot.active {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px var(--text-accent);
+}
+
+.slider { width: 100px; accent-color: var(--text-accent); }
+.slider-value {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 36px;
+  text-align: right;
+}
+
+/* ============================================================
+   11. 滚动条样式
+   ============================================================ */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb {
+  background: rgba(200, 180, 220, 0.5);
+  border-radius: 2px;
+}
+
+/* ============================================================
+   12. 图片调整弹窗 (Adjust Modal)
+   ============================================================ */
+.adjust-modal {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 20;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.adjust-modal.show { display: flex; }
+
+.adjust-panel {
+  width: calc(100% - 32px);
+  max-width: 360px;
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+}
+
+.adjust-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid #eee;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-accent);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.adjust-tip {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: normal;
+}
+
+.adjust-preview {
+  margin: 16px auto;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid rgba(200, 180, 220, 0.3);
+  position: relative;
+  cursor: grab;
+  user-select: none;
+  background: #f5f5f5;
+}
+.adjust-preview.dragging { cursor: grabbing; }
+.adjust-preview-bg {
+  position: absolute;
+  inset: 0;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
+/* 背景预览 — 响应式宽高比 */
+.bg-preview {
+  width: calc(100% - 40px);
+  max-width: 280px;
+  height: auto;
+  aspect-ratio: 280/438;
+}
+
+/* 头像预览 — 正方形，响应式 */
+.avatar-preview {
+  width: min(200px, calc(100% - 40px));
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
+.adjust-controls {
+  padding: 0 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.adjust-footer {
+  padding: 12px 16px;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.footer-left  { display: flex; gap: 8px; }
+.footer-right { display: flex; gap: 10px; }
+
+/* ============================================================
+   13. 弹窗按钮样式
+   ============================================================ */
+.btn-reselect,
+.btn-cancel,
+.btn-confirm {
+  padding: 6px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+.btn-reselect { background: rgba(200, 180, 220, 0.2); color: var(--text-accent); }
+.btn-cancel    { background: #f0eef5; color: #7a7a9a; }
+.btn-confirm   {
+  background: linear-gradient(to right, var(--btn-gradient-start), var(--btn-gradient-end));
+  color: white;
+  font-weight: 500;
+}
+
+/* ============================================================
+   14. 插件入口 (Plugin Entry Link)
+   ============================================================ */
+.entry-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin: 4px 0 8px;
+  text-decoration: none;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 10px;
+  border: 1px solid rgba(200, 180, 220, 0.25);
+  transition: all 0.18s ease;
+}
+.entry-link:hover {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(180, 160, 220, 0.5);
+  transform: translateX(2px);
+}
+.entry-link:active { transform: scale(0.98); }
+
+.entry-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #FBE5E6 0%, #FFF8F5 50%, #F0F6FB 100%);
+  border-radius: 8px;
+  border: 1px solid rgba(200, 180, 220, 0.3);
+}
+
+.entry-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.entry-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-accent);
+  letter-spacing: 0.5px;
+}
+.entry-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+}
+
+.entry-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+.entry-link:hover .entry-arrow { opacity: 1; color: var(--text-accent); }
+

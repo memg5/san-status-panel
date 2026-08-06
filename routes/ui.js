@@ -1,0 +1,611 @@
+// routes/ui.js — v0.4.0 模块化重构
+// CSS → assets/style.css  |  JS → assets/settings.js  |  路由 → 本文件
+
+import fs from "node:fs";
+import path from "node:path";
+import { TextEncoder } from "node:util";
+import { createTriggerReply } from "./trigger-reply.js";
+import { nowStamp, nowLocal } from "../lib/now.js";
+export default function (app, ctx) {
+  const dataDir = ctx.dataDir;
+  const actionsPath = path.join(dataDir, "pending_actions.json");
+  const configPath = path.join(dataDir, "config.json");
+  const assetsDir = path.join(dataDir, "assets");
+  const HANA_HOME = path.dirname(path.dirname(dataDir));
+  try { fs.mkdirSync(assetsDir, { recursive: true }); } catch (e) {}
+
+  // ---- 插件资源目录 ----
+  const pluginAssets = path.join(ctx.pluginDir, "assets");
+
+  // ================================================================
+  //  配置读写
+  // ================================================================
+  function readConfig() {
+    try { if (fs.existsSync(configPath)) return JSON.parse(fs.readFileSync(configPath, "utf-8")); } catch (e) {}
+    return {};
+  }
+  function saveConfig(cfg) {
+    try { fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2), "utf-8"); } catch (e) {}
+  }
+
+  // ================================================================
+  //  SSE 实时推送
+  // ================================================================
+  const sseClients = new Set();
+  const statusPath = path.join(dataDir, "status.json");
+  try {
+    fs.watch(statusPath, (eventType) => {
+      if (eventType === "change") {
+        for (const w of sseClients) {
+          w.write(new TextEncoder().encode("event: refresh\ndata: {}\n\n")).catch(() => sseClients.delete(w));
+        }
+      }
+    });
+  } catch (e) {}
+
+  // 触发 Agent 回复（共享逻辑：poke / send / 娱乐任务申请 共用）
+  const tryTriggerReply = createTriggerReply({ dataDir, configPath, log: ctx.log });
+
+  // ================================================================
+  //  静态资源服务 (CSS / JS / Widget Bundle)
+  // ================================================================
+  function serveFile(filePath, contentType) {
+    try {
+      if (!fs.existsSync(filePath)) return null;
+      var content = fs.readFileSync(filePath, "utf-8");
+      // widget.bundle.js: 移除冗余的轮询 (SSE 已处理实时更新)
+      if (filePath.endsWith("widget.bundle.js")) {
+        content = content.replace("setInterval(loadStatus, 5e3);", "");
+      }
+      return new Response(content, {
+        headers: {
+          "Content-Type": contentType,
+          "Cache-Control": "public, max-age=3600"
+        }
+      });
+    } catch (e) {
+      return null;
+    }
+  }
+
+  app.get("/static/style.css", (c) => {
+    var r = serveFile(path.join(pluginAssets, "style.css"), "text/css; charset=utf-8");
+    return r || c.text("/* not found */", 404);
+  });
+
+  app.get("/static/settings.js", (c) => {
+    var r = serveFile(path.join(pluginAssets, "settings.js"), "application/javascript; charset=utf-8");
+    return r || c.text("// not found", 404);
+  });
+
+  app.get("/static/widget.bundle.js", (c) => {
+    var r = serveFile(path.join(pluginAssets, "widget.bundle.js"), "application/javascript; charset=utf-8");
+    return r || c.text("// not found", 404);
+  });
+
+  // ================================================================
+  //  HTML 模板
+  // ================================================================
+  var HTML = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>桑多涅状态</title>
+  <style>/* CSS_INLINE */</style>
+</head>
+<body>
+  <!-- ====== 主面板 ====== -->
+  <div class="panel">
+    <div class="panel-bg" id="panelBg"></div>
+    <div class="panel-content">
+
+      <!-- 顶栏 -->
+      <div class="header-bar">
+        <div class="status-tag-cloud" id="statusTagCloud">
+          <span class="status-tag">...</span>
+        </div>
+        <div class="header-right">
+          <span class="indicator" id="indicator"></span>
+          <div class="settings-btn-wrap">
+            <button class="settings-btn" id="settingsBtn">\u2699</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 头像 & 名称 -->
+      <div class="avatar-section" id="avatarSection">
+        <div class="avatar-circle" id="avatarCircle">\u6851</div>
+        <div class="panel-title" id="panelTitle">\u6851\u591a\u5948</div>
+      </div>
+
+      <!-- 状态卡 -->
+      <div class="glass-card">
+        <div id="content"></div>
+      </div>
+
+      <!-- 记忆碎片卡 -->
+      <div class="glass-card memory-card" id="memoryCard">
+        <div id="memoryText" style="font-size:13px;color:var(--text-secondary);font-style:italic"></div>
+      </div>
+
+      <!-- 底部操作栏 -->
+      <div class="action-bar">
+        <button class="action-btn" id="btnPoke">\u6233\u4e00\u4e0b</button>
+        <div class="action-divider"></div>
+        <button class="action-btn" id="btnCoffee">\u9001\u5496\u5561</button>
+        <div class="action-divider"></div>
+        <button class="action-btn" id="btnFeed">\u6295\u5582</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== 遮罩 & 设置面板 ====== -->
+  <div class="panel-overlay" id="panelOverlay"></div>
+  <div class="settings-panel" id="settingsPanel">
+    <div class="sp-header">
+      <span>\u8bbe\u7f6e</span>
+      <span class="sp-close" id="spClose">\u2716</span>
+    </div>
+    <div class="sp-body">
+
+      <!-- 会话选择 -->
+      <div class="sp-group">
+        <div class="sp-ttl">\u4f1a\u8bdd\u9009\u62e9</div>
+        <div id="sessionGroupsContainer">
+          <div style="padding:20px;text-align:center;color:#999">...</div>
+        </div>
+      </div>
+
+      <!-- 显示设置 -->
+      <div class="sp-group">
+        <div class="sp-ttl">\u663e\u793a</div>
+        <div class="setting-item">
+          <span>\u5934\u50cf</span>
+          <input type="checkbox" id="showAvatarToggle" checked>
+        </div>
+        <div class="setting-item">
+          <span>\u540d\u79f0</span>
+          <input type="checkbox" id="showNameToggle" checked>
+        </div>
+        <div class="setting-item">
+          <span>\u4e0a\u4f20\u5934\u50cf</span>
+          <button id="uploadAvatarBtn" style="background:none;border:1px solid var(--text-accent);color:var(--text-accent);border-radius:14px;padding:4px 12px;font-size:12px;cursor:pointer">\u4e0a\u4f20</button>
+        </div>
+        <div class="setting-item">
+          <span>\u4e0a\u4f20\u80cc\u666f</span>
+          <button id="uploadBgBtn" style="background:none;border:1px solid var(--text-accent);color:var(--text-accent);border-radius:14px;padding:4px 12px;font-size:12px;cursor:pointer">\u4e0a\u4f20</button>
+        </div>
+        <div class="setting-item">
+          <span>\u5361\u7247\u900f\u660e\u5ea6</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="range" id="opacitySlider" class="slider" min="30" max="100" value="65">
+            <span class="slider-value" id="opacityValue">65%</span>
+          </div>
+        </div>
+        <div class="setting-item">
+          <span>\u5b57\u4f53\u989c\u8272</span>
+          <div>
+            <span class="color-dot active" data-primary="#4A4A5A" data-secondary="#7A7A9A" data-accent="#6b5b95" style="background:#6b5b95"></span>
+            <span class="color-dot" data-primary="#4A2020" data-secondary="#8B4A4A" data-accent="#c62828" style="background:#c62828"></span>
+            <span class="color-dot" data-primary="#2A4A2A" data-secondary="#5A7A5A" data-accent="#2E7D32" style="background:#2E7D32"></span>
+            <span class="color-dot" data-primary="#2A3A5A" data-secondary="#4A6A8A" data-accent="#1565C0" style="background:#1565C0"></span>
+            <span class="color-dot" data-primary="#4A3A2A" data-secondary="#8A6A4A" data-accent="#EF6C00" style="background:#EF6C00"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 位置（天气用） -->
+      <div class="sp-group">
+        <div class="sp-ttl">位置（天气）</div>
+        <div class="setting-item">
+          <span>当前位置</span>
+          <span id="locStatus" style="font-size:12px;color:#999;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">未获取</span>
+        </div>
+        <div class="setting-item">
+          <span>获取精确位置</span>
+          <button id="locateBtn" style="background:none;border:1px solid var(--text-accent);color:var(--text-accent);border-radius:14px;padding:4px 12px;font-size:12px;cursor:pointer">获取</button>
+        </div>
+        <div class="setting-item" style="font-size:11px;color:#bbb;line-height:1.5">
+          <span>会请求浏览器定位权限，获取后天气按当前位置显示。默认使用内置坐标。</span>
+        </div>
+      </div>
+
+      <!-- 版本信息 -->
+      <div class="sp-group">
+        <div class="setting-item" style="font-size:12px;color:#999;">
+          <span>SanStatus v0.4.0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== 背景调整弹窗 ====== -->
+  <div class="adjust-modal" id="bgAdjustModal">
+    <div class="adjust-panel">
+      <div class="adjust-header">
+        <span>\u8c03\u6574\u80cc\u666f</span>
+        <span class="adjust-tip">\u62d6\u62fd\u79fb\u52a8 \u00b7 \u6eda\u8f6e\u7f29\u653e</span>
+      </div>
+      <div class="adjust-preview bg-preview" id="bgPreview">
+        <div class="adjust-preview-bg" id="bgPreviewBg"></div>
+      </div>
+      <div class="adjust-controls">
+        <div class="slider-row">
+          <span>\u56fe\u7247\u7f29\u653e</span>
+          <input type="range" id="bgScaleSlider" class="slider" min="50" max="300" value="120">
+          <span class="slider-value" id="bgScaleValue">120%</span>
+        </div>
+      </div>
+      <div class="adjust-footer">
+        <div class="footer-left">
+          <label class="btn-reselect">\u91cd\u65b0\u9009\u62e9
+            <input type="file" id="bgReselect" accept="image/*" hidden>
+          </label>
+        </div>
+        <div class="footer-right">
+          <button class="btn-cancel" id="bgAdjustCancel">\u53d6\u6d88</button>
+          <button class="btn-confirm" id="bgAdjustConfirm">\u786e\u5b9a</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== 头像调整弹窗 ====== -->
+  <div class="adjust-modal" id="avatarAdjustModal">
+    <div class="adjust-panel">
+      <div class="adjust-header">
+        <span>\u8c03\u6574\u5934\u50cf</span>
+        <span class="adjust-tip">\u62d6\u62fd\u79fb\u52a8 \u00b7 \u6eda\u8f6e\u7f29\u653e</span>
+      </div>
+      <div class="adjust-preview avatar-preview" id="avatarPreview">
+        <div class="adjust-preview-bg" id="avatarPreviewBg"></div>
+      </div>
+      <div class="adjust-controls">
+        <div class="slider-row">
+          <span>\u56fe\u7247\u7f29\u653e</span>
+          <input type="range" id="avatarScaleSlider" class="slider" min="100" max="300" value="120">
+          <span class="slider-value" id="avatarScaleValue">120%</span>
+        </div>
+      </div>
+      <div class="adjust-footer">
+        <div class="footer-left">
+          <label class="btn-reselect">\u91cd\u65b0\u9009\u62e9
+            <input type="file" id="avatarReselect" accept="image/*" hidden>
+          </label>
+        </div>
+        <div class="footer-right">
+          <button class="btn-cancel" id="avatarAdjustCancel">\u53d6\u6d88</button>
+          <button class="btn-confirm" id="avatarAdjustConfirm">\u786e\u5b9a</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== 脚本 ====== -->
+  <!-- 核心: Token 拦截 + 状态轮询 + SSE -->
+  <script>
+    var t = (function () {
+      var m = (window.location.search || "").match(/[?&]token=([^&]+)/);
+      return m ? decodeURIComponent(m[1]) : "";
+    })();
+    var f = window.fetch;
+    window.fetch = function (u, o) {
+      if (t && typeof u === "string" && u.indexOf("/api/plugins/san-status-panel/api/") >= 0) {
+        u += (u.indexOf("?") >= 0 ? "&" : "?") + "token=" + encodeURIComponent(t);
+      }
+      return f.call(this, u, o);
+    };
+    window.sp = function () {
+      fetch("/api/plugins/san-status-panel/api/poke", { method: "POST" })
+        .then(function () { setTimeout(loadStatus, 800); })
+        .catch(function () {});
+    };
+    window.si = function (i) {
+      fetch("/api/plugins/san-status-panel/api/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item: i })
+      }).then(function () { setTimeout(loadStatus, 800); })
+        .catch(function () {});
+    };
+    var es = new EventSource(
+      window.location.origin + "/api/plugins/san-status-panel/api/status-stream?token=" + encodeURIComponent(t)
+    );
+    es.addEventListener("refresh", function () { loadStatus(); });
+  </script>
+
+  <!-- Widget 核心渲染逻辑 -->
+  <script>/* WIDGET_JS_INLINE */</script>
+
+  <!-- 设置面板 & 交互逻辑 -->
+  <script>/* SETTINGS_JS_INLINE */</script>
+</body>
+</html>`;
+
+  // ================================================================
+  //  路由定义
+  // ================================================================
+  // ---- Widget 页面 ----
+  function inlineHTML() {
+    var css = "", wjs = "", sjs = "";
+    try { css = fs.readFileSync(path.join(pluginAssets, "style.css"), "utf-8"); } catch(e){}
+    try { wjs = fs.readFileSync(path.join(pluginAssets, "widget.bundle.js"), "utf-8"); } catch(e){}
+    try { sjs = fs.readFileSync(path.join(pluginAssets, "settings.js"), "utf-8"); } catch(e){}
+    return HTML
+      .replace("/* CSS_INLINE */", css)
+      .replace("/* WIDGET_JS_INLINE */", wjs)
+      .replace("/* SETTINGS_JS_INLINE */", sjs);
+  }
+  app.get("/widget", (c) => c.html(inlineHTML()));
+  app.get("/card/status", (c) => c.html(inlineHTML()));
+
+  // ---- SSE 实时推送 ----
+  app.get("/api/status-stream", (c) => {
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+    sseClients.add(writer);
+    writer.write(new TextEncoder().encode("event: connected\ndata: {}\n\n"));
+    c.req.raw.signal.addEventListener("abort", () => {
+      sseClients.delete(writer);
+      writer.close().catch(() => {});
+    });
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive"
+      }
+    });
+  });
+
+  // ---- 状态查询 ----
+  app.get("/api/status", (c) => {
+    c.header("Access-Control-Allow-Origin", "*");
+    try {
+      var p = path.join(dataDir, "status.json");
+      if (fs.existsSync(p)) return c.json(JSON.parse(fs.readFileSync(p, "utf-8")));
+    } catch (e) {}
+    return c.json({ activity: "等待桑多涅更新", energy: "?", mood: "?", updatedAt: null });
+  });
+
+  // ---- 配置读写 ----
+  app.get("/api/config", (c) => {
+    var cfg = readConfig();
+    return c.json({
+      bg: cfg.bg || null,
+      avatar: cfg.avatar || null,
+      showAvatar: cfg.showAvatar !== false,
+      showName: cfg.showName !== false,
+      name: cfg.name || "桑多涅",
+      targetAgent: cfg.targetAgent || "",
+      targetSession: cfg.targetSession || "",
+      targetSessionId: cfg.targetSessionId || "",  // 新增：用于 bridge 会话
+      textColor: cfg.textColor || null,
+      cardOpacity: cfg.cardOpacity || 65,
+      bgConfig: cfg.bgConfig || null,
+      avatarConfig: cfg.avatarConfig || null,
+      location: cfg.location || null
+    });
+  });
+
+  app.post("/api/config", async (c) => {
+    try {
+      var body = await c.req.json();
+      var cfg = readConfig();
+      Object.assign(cfg, body);
+      saveConfig(cfg);
+      return c.json({ ok: true });
+    } catch (e) {
+      return c.json({ ok: false }, 500);
+    }
+  });
+
+  // ---- 位置读取（天气系统用） ----
+  // 位置由设置面板「获取当前位置」通过浏览器 Geolocation 获取并存入 config.location。
+  // 读取时使用内置默认坐标，没有定位时使用。
+  app.get("/api/location", (c) => {
+    var cfg = readConfig();
+    var loc = cfg.location || { city: "默认", region: "", country: "", lat: 29.51, lon: 109.41, source: "default" };
+    return c.json({ ok: true, location: loc });
+  });
+
+  // ---- 静态资源 (用户上传的图片) ----
+  app.get("/api/assets/:file", (c) => {
+    var file = c.req.param("file");
+    var fp = path.join(assetsDir, path.basename(file));
+    if (fs.existsSync(fp)) {
+      var ext = path.extname(file).toLowerCase();
+      var mime = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".webp": "image/webp"
+      }[ext] || "application/octet-stream";
+      var buf = fs.readFileSync(fp);
+      return new Response(buf, {
+        headers: { "Content-Type": mime, "Cache-Control": "max-age=86400" }
+      });
+    }
+    return c.json({ error: "not found" }, 404);
+  });
+
+  app.post("/api/assets", async (c) => {
+    try {
+      var body = await c.req.json();
+      var type = body.type;
+      var data = body.data;
+      if (!data) return c.json({ ok: false }, 400);
+      var m = data.match(/^data:image\/(png|jpeg|jpg|gif|webp);base64,(.+)$/);
+      if (!m) return c.json({ ok: false }, 400);
+      var extMap = { png: ".png", jpeg: ".jpg", jpg: ".jpg", gif: ".gif", webp: ".webp" };
+      var ext = extMap[m[1]] || ".png";
+      var buf = Buffer.from(m[2], "base64");
+      var fn = type + "_" + Date.now() + ext;
+      fs.writeFileSync(path.join(assetsDir, fn), buf);
+      var cfg = readConfig();
+      var oldKey = type === "bg" ? cfg.bg : cfg.avatar;
+      if (oldKey) {
+        try { fs.unlinkSync(path.join(assetsDir, oldKey)); } catch (e) {}
+      }
+      cfg[type === "bg" ? "bg" : "avatar"] = fn;
+      saveConfig(cfg);
+      return c.json({ ok: true, url: "/api/plugins/san-status-panel/api/assets/" + fn });
+    } catch (e) {
+      return c.json({ ok: false }, 500);
+    }
+  });
+
+  // ---- Agent 会话列表 ----
+  app.get("/api/agent-sessions", (c) => {
+    var cfg = readConfig();
+    var groups = [];
+    try {
+      var ad = path.join(HANA_HOME, "agents");
+      if (!fs.existsSync(ad)) {
+        ctx.log?.warn?.("[状态面板] agents 目录不存在:", ad);
+        return c.json({ groups: groups });
+      }
+      var entries = fs.readdirSync(ad, { withFileTypes: true });
+      for (var i = 0; i < entries.length; i++) {
+        if (!entries[i].isDirectory()) continue;
+        var aid = entries[i].name;
+        var label = aid;
+        try {
+          var cp = path.join(ad, aid, "config.yaml");
+          if (fs.existsSync(cp)) {
+            var raw = fs.readFileSync(cp, "utf-8");
+            var ab = raw.match(/agent:\n([\s\S]*?)(?=\n\S|\n$)/);
+            if (ab) {
+              var nm = ab[1].match(/name:\s*(.+)/);
+              if (nm) label = nm[1].trim();
+            }
+          }
+        } catch (e) {}
+        var sessions = [];
+        try {
+          var sd = path.join(ad, aid, "sessions");
+          if (fs.existsSync(sd)) {
+            // 递归扫描 sessions 目录下所有 .jsonl 文件（跳过 archived 和 session-meta）
+            function walkSessions(dir, maxResults) {
+              var result = [];
+              function walk(d) {
+                try {
+                  var items = fs.readdirSync(d, { withFileTypes: true });
+                  for (var wi = 0; wi < items.length && result.length < maxResults; wi++) {
+                    var item = items[wi];
+                    var full = path.join(d, item.name);
+                    if (item.isDirectory()) {
+                      if (item.name === "archived") continue;  // 跳过归档
+                      walk(full);
+                    } else if (item.name.endsWith(".jsonl") && !item.name.startsWith("session-titles")) {
+                      result.push(full);
+                    }
+                  }
+                } catch (e) {}
+              }
+              walk(dir);
+              result.sort(function (a, b) {
+                try { return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs; } catch (e) { return 0; }
+              });
+              return result.slice(0, maxResults);
+            }
+            var sfs = walkSessions(sd, 20);
+            var titles = {};
+            try {
+              var tp = path.join(sd, "session-titles.json");
+              if (fs.existsSync(tp)) titles = JSON.parse(fs.readFileSync(tp, "utf-8"));
+            } catch (e) {}
+            for (var j = 0; j < sfs.length; j++) {
+              var fp = sfs[j];
+              var slabel = "";
+              var sid = "";
+              try {
+                var firstLine = fs.readFileSync(fp, "utf-8").split("\n").filter(Boolean)[0];
+                if (firstLine) {
+                  var fd = JSON.parse(firstLine);
+                  sid = fd.id || "";
+                }
+              } catch (e) {}
+              slabel = titles[fp] || titles[path.basename(fp)] || titles[sid] || "";
+              if (!slabel) {
+                try {
+                  var allLines = fs.readFileSync(fp, "utf-8").split("\n").filter(Boolean);
+                  for (var k = 0; k < allLines.length && k < 30; k++) {
+                    try {
+                      var d = JSON.parse(allLines[k]);
+                      if (d.type === "message" && d.message && d.message.role === "user") {
+                        var cnt = d.message.content;
+                        if (typeof cnt === "string") { slabel = cnt.slice(0, 30); break; }
+                        else if (Array.isArray(cnt)) {
+                          for (var ci = 0; ci < cnt.length; ci++) {
+                            if (cnt[ci].type === "text" && cnt[ci].text) {
+                              slabel = cnt[ci].text.slice(0, 30);
+                              break;
+                            }
+                          }
+                          if (slabel) break;
+                        }
+                      }
+                    } catch (e) {}
+                  }
+                } catch (e) {}
+              }
+              if (!slabel) {
+                var bn = path.basename(fp);
+                var tm = bn.match(/^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})/);
+                slabel = tm ? tm[1].replace(/T/, " ") : bn.slice(0, 16);
+              }
+              var isActive = fp === cfg.targetSession || sid === cfg.targetSession || fp === cfg.targetSession;
+              var isBridge = /bridge|phone/.test(fp);
+              // bridge/phone 会话加前缀方便识别
+              if (isBridge) {
+                slabel = "微信 · " + slabel;
+              }
+              sessions.push({ id: fp, sid: sid, label: slabel, active: isActive, bridge: isBridge });
+            }
+          }
+        } catch (e) {}
+        if (sessions.length > 0) groups.push({ agentId: aid, label: label, sessions: sessions });
+      }
+    } catch (e) {
+      ctx.log?.error?.("[状态面板] agent-sessions 异常:", e.message);
+    }
+    ctx.log?.info?.("[状态面板] agent-sessions:", groups.length, "个 agent 组, 当前:", cfg.targetAgent || "(未选)");
+    return c.json({ groups: groups, current: cfg.targetAgent || "" });
+  });
+
+  // ---- 互动: 戳一下 ----
+  app.post("/api/poke", async (c) => {
+    try {
+      var actions = [];
+      try { actions = JSON.parse(fs.readFileSync(actionsPath, "utf-8")); } catch (e) {}
+      actions.push({ action: "poke", timestamp: nowStamp(), tsLocal: nowLocal() });
+      if (actions.length > 50) actions = actions.slice(-50);
+      fs.writeFileSync(actionsPath, JSON.stringify(actions, null, 2), "utf-8");
+      tryTriggerReply(c, "主人戳了你一下。", "poke");
+      return c.json({ ok: true });
+    } catch (e) {
+      return c.json({ ok: false }, 500);
+    }
+  });
+
+  // ---- 互动: 送礼物 ----
+  app.post("/api/send", async (c) => {
+    try {
+      var body = await c.req.json();
+      var item = body.item;
+      if (!item) return c.json({ ok: false }, 400);
+      var actions = [];
+      try { actions = JSON.parse(fs.readFileSync(actionsPath, "utf-8")); } catch (e) {}
+      actions.push({ action: "send", item: item, timestamp: nowStamp(), tsLocal: nowLocal() });
+      if (actions.length > 50) actions = actions.slice(-50);
+      fs.writeFileSync(actionsPath, JSON.stringify(actions, null, 2), "utf-8");
+      tryTriggerReply(c, "主人给了你 " + (item || "东西"), "send");
+      return c.json({ ok: true });
+    } catch (e) {
+      return c.json({ ok: false }, 500);
+    }
+  });
+}

@@ -1,0 +1,17 @@
+# 依赖
+node_modules/
+
+# 运行时数据（Hana 插件数据目录，勿提交）
+plugin-data/
+*.log
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# 开发残留
+*.bak
+*.bak-*
