@@ -263,59 +263,116 @@ function applyAvatarPreview(config) {
 }
 
 // --- 拖拽 & 滚轮缩放 ---
+// 拖拽采用 Pointer Events + setPointerCapture：
+// 1. 监听器只在首次 initDrag 时注册一次（防重复监听导致抖动画错）
+// 2. setPointerCapture 让拖拽期间指针事件始终指向预览框（移出边界不丢事件）
+// 3. 背景百分比定位语义：offset = (pw - iw) * posX/100，可动范围 total = |pw - iw|
+//    posX 增大 → 露图片右侧 → 内容视觉向左移。因此拖右（dx>0）要让内容右移 → posX 减小。
+//    公式：posX = (offset - min) / total * 100，offset = baseOffset + dx（拖右 offset 增大）
+//    —— offset 增大对映 posX 增大？不对：当图大于框，offset 范围 [-(iw-pw), 0]，min=-(iw-pw)
+//    offset=-min 时 posX=0，offset=0 时 posX=100。拖右 offset 向 0 走 → posX 增大 → 露右 → 内容左移。
+//    这跟直觉相反。正确做法：拖右应该让 offset 减小（内容右移 = 露左 = posX 减小）。
+//    所以 dx 取反：offset = baseOffset - dx。
+var dragState = null; // { previewEl, configRef, updateCallback, startX, startY, baseOffX, baseOffY }
+// 动态灵敏度：让“鼠标拖满行程”的距离恒定（FULL_DRAG_PX），X/Y 各自按可动范围算系数
+var FULL_DRAG_PX = 120;
+
+function onDragMove(e) {
+  if (!dragState) return;
+  var s = dragState;
+  var r = s.previewEl.getBoundingClientRect();
+  var pw = r.width, ph = r.height;
+  if (pw <= 0 || ph <= 0) return;
+  var iw = pw * (s.configRef.scale / 100), ih = ph * (s.configRef.scale / 100);
+  var rawDx = e.clientX - s.startX, rawDy = e.clientY - s.startY;
+  var minX = Math.min(0, pw - iw), maxX = Math.max(0, pw - iw);
+  var minY = Math.min(0, ph - ih), maxY = Math.max(0, ph - ih);
+  var totalX = Math.abs(pw - iw), totalY = Math.abs(ph - ih);
+  var sensX = totalX > 0 ? totalX / FULL_DRAG_PX : 0;
+  var sensY = totalY > 0 ? totalY / FULL_DRAG_PX : 0;
+  var dx = rawDx * sensX, dy = rawDy * sensY;
+  // === 关键：CSS background-position 的真实数学 ===
+  // background-position: X% → 图片偏移 offset = (pw - iw) * X/100
+  // 拖拽目标：拖右(dx>0) → 图片内容视觉右移
+  // 图大(分母<0)：内容右移 = 露左 = posX 减小 → offset = (负)×(小) → offset 增大 → base + dx
+  // 图小(分母>0)：内容右移 = 图片右移 = posX 增大 → offset = (正)×(大) → offset 增大 → base + dx
+  // 两种情况的 offset 都是增大 → 统一 off_new = base + dx！
+  // 反解：posX = offX / (pw - iw) * 100（不能用 (off-min)/total——图大时 min<0 会方向反）
+  if (totalX > 0 && pw !== iw) {
+    var offX = s.baseOffX + dx;
+    offX = Math.max(minX, Math.min(maxX, offX));
+    s.configRef.posX = (offX / (pw - iw)) * 100;
+  }
+  if (totalY > 0 && ph !== ih) {
+    var offY = s.baseOffY + dy;
+    offY = Math.max(minY, Math.min(maxY, offY));
+    s.configRef.posY = (offY / (ph - ih)) * 100;
+  }
+  s.updateCallback();
+}
+
+function onDragUp(e) {
+  if (!dragState) return;
+  var s = dragState;
+  try { s.previewEl.releasePointerCapture(e.pointerId); } catch (_) {}
+  s.previewEl.classList.remove("dragging");
+  dragState = null;
+}
+
 function initDrag(previewEl, configRef, updateCallback) {
-  var dragging = false, startX, startY, startOffX, startOffY;
-  previewEl.addEventListener("mousedown", function (e) {
-    dragging = true;
-    previewEl.classList.add("dragging");
-    startX = e.clientX;
-    startY = e.clientY;
-    var r = previewEl.getBoundingClientRect();
-    var pw = r.width, ph = r.height;
-    var iw = pw * (configRef.scale / 100), ih = ph * (configRef.scale / 100);
-    startOffX = (pw - iw) * (configRef.posX / 100);
-    startOffY = (ph - ih) * (configRef.posY / 100);
+  if (!previewEl) return;
+  previewEl.addEventListener("pointerdown", function (e) {
+    if (e.button !== undefined && e.button !== 0) return;
+    if (dragState) return;
     e.preventDefault();
-  });
-  document.addEventListener("mousemove", function (e) {
-    if (!dragging) return;
     var r = previewEl.getBoundingClientRect();
     var pw = r.width, ph = r.height;
     var iw = pw * (configRef.scale / 100), ih = ph * (configRef.scale / 100);
-    var dx = e.clientX - startX, dy = e.clientY - startY;
-    var newX = startOffX + dx, newY = startOffY + dy;
-    var minX = pw - iw, maxX = 0, minY = ph - ih, maxY = 0;
-    newX = Math.max(minX, Math.min(maxX, newX));
-    newY = Math.max(minY, Math.min(maxY, newY));
-    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
-      var totalX = Math.abs(pw - iw), totalY = Math.abs(ph - ih);
-      configRef.posX = totalX === 0 ? 50 : ((newX - minX) / totalX) * 100;
-      configRef.posY = totalY === 0 ? 50 : ((newY - minY) / totalY) * 100;
-      updateCallback();
-    }
+    // 锁定按下时的基准 offset（图片左上角相对框左上角）
+    dragState = {
+      previewEl: previewEl,
+      configRef: configRef,
+      updateCallback: updateCallback,
+      startX: e.clientX,
+      startY: e.clientY,
+      baseOffX: (pw - iw) * (configRef.posX / 100),
+      baseOffY: (ph - ih) * (configRef.posY / 100)
+    };
+    previewEl.classList.add("dragging");
+    try { previewEl.setPointerCapture(e.pointerId); } catch (_) {}
   });
-  document.addEventListener("mouseup", function () {
-    if (dragging) { dragging = false; previewEl.classList.remove("dragging"); }
-  });
+  if (!window.__sanDragBound) {
+    window.__sanDragBound = true;
+    window.addEventListener("pointermove", onDragMove);
+    window.addEventListener("pointerup", onDragUp);
+    window.addEventListener("pointercancel", onDragUp);
+  }
 }
 
 function initWheelZoom(previewEl, configRef, sliderEl, valueEl, updateCallback, min, max) {
-  previewEl.addEventListener("wheel", function (e) {
-    e.preventDefault();
-    var delta = e.deltaY > 0 ? -5 : 5;
-    var newScale = parseInt(configRef.scale) + delta;
-    newScale = Math.max(min, Math.min(max, newScale));
-    configRef.scale = newScale;
-    sliderEl.value = newScale;
-    valueEl.textContent = newScale + "%";
-    updateCallback();
-  }, { passive: false });
-  sliderEl.addEventListener("input", function () {
-    var val = parseInt(sliderEl.value);
-    configRef.scale = val;
-    valueEl.textContent = val + "%";
-    updateCallback();
-  });
+  if (!previewEl) return;
+  if (!previewEl.__wheelBound) {
+    previewEl.__wheelBound = true;
+    previewEl.addEventListener("wheel", function (e) {
+      e.preventDefault();
+      var delta = e.deltaY > 0 ? -5 : 5;
+      var newScale = parseInt(configRef.scale) + delta;
+      newScale = Math.max(min, Math.min(max, newScale));
+      configRef.scale = newScale;
+      sliderEl.value = newScale;
+      valueEl.textContent = newScale + "%";
+      updateCallback();
+    }, { passive: false });
+  }
+  if (!sliderEl.__sliderBound) {
+    sliderEl.__sliderBound = true;
+    sliderEl.addEventListener("input", function () {
+      var val = parseInt(sliderEl.value);
+      configRef.scale = val;
+      valueEl.textContent = val + "%";
+      updateCallback();
+    });
+  }
 }
 
 // --- 初始化拖拽缩放 ---
@@ -541,6 +598,7 @@ setInterval(function () {
 /* ============================================================
    K. 记忆碎片 轮换
    ============================================================ */
+// 每日碎片：优先从后端接口读（当天从会话提取的真实短句），接口无数据才用本地文案池兑底
 var memories = [
   "正在回忆：那天下午你说她\"丑萌\"，她偷偷记到了现在…",
   "碎片浮现：17:23 被喂了咖啡，她觉得你是故意的。",
@@ -549,11 +607,45 @@ var memories = [
   "记忆闪回：你第一次戳她，她说\"反弹\"然后笑了。",
   "往事浮现：你送她牛角包，她嘴上嫌弃却全吃完了。"
 ];
+var dailyFragments = []; // 真实碎片（当天从会话提取）
 var memIdx = 0;
+
+function renderMemory() {
+  var el = document.getElementById("memoryText");
+  if (!el) return;
+  if (dailyFragments.length > 0) {
+    var f = dailyFragments[memIdx % dailyFragments.length];
+    el.textContent = "💭 她记得你说过：「" + f + "」";
+  } else {
+    el.textContent = "💭 " + memories[memIdx % memories.length];
+  }
+}
+
+// 每天拉一次真实碎片（接口有缓存，当天后续请求直接返回）
+function loadFragments() {
+  fetch("/api/plugins/san-status-panel/api/fragments")
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d && d.ok && Array.isArray(d.fragments) && d.fragments.length > 0) {
+        dailyFragments = d.fragments;
+        memIdx = 0;
+        renderMemory();
+      }
+    })
+    .catch(function () {});
+}
+
 setInterval(function () {
-  memIdx = (memIdx + 1) % memories.length;
-  document.getElementById("memoryText").textContent = "\ud83d\udcad " + memories[memIdx];
+  memIdx++;
+  renderMemory();
 }, 7000);
+
+// 页面就绪后加载碎片
+if (document.readyState === "complete" || document.readyState === "interactive") {
+  loadFragments();
+} else {
+  document.addEventListener("DOMContentLoaded", loadFragments);
+}
 
 /* ============================================================
    L. 面板尺寸监听 — 实时更新调整弹窗预览尺寸

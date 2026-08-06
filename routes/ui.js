@@ -410,6 +410,98 @@ export default function (app, ctx) {
     return c.json({ ok: true, location: loc });
   });
 
+  //  记忆碎片（每日 3 句）：读取当前会话的当日对话，提取用户短句
+  // ================================================================
+  const fragmentsPath = path.join(dataDir, "daily-fragments.json");
+  function todayLocal() {
+    var d = new Date(Date.now() + 8 * 3600 * 1000); // Asia/Shanghai
+    return d.toISOString().slice(0, 10); // YYYY-MM-DD
+  }
+  function resolveSessionPath(cfg) {
+    // 优先 config.targetSession；为空时自动找 agents/{targetAgent}/sessions 下最新会话
+    if (cfg.targetSession && fs.existsSync(cfg.targetSession)) return cfg.targetSession;
+    try {
+      var agentId = cfg.targetAgent || "hanako";
+      var sessDir = path.join(HANA_HOME, "agents", agentId, "sessions");
+      if (fs.existsSync(sessDir)) {
+        var files = fs.readdirSync(sessDir).filter(function (f) { return f.endsWith(".jsonl"); })
+          .map(function (f) { return path.join(sessDir, f); })
+          .filter(function (f) {
+            try { return fs.statSync(f).size > 1024; } catch (e) { return false; } // 跳过空/新文件
+          })
+          .sort(function (a, b) { return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs; });
+        if (files.length > 0) return files[0];
+      }
+    } catch (e) {}
+    return "";
+  }
+  function pickFragments(sessionPath, limit) {
+    // 从会话文件提取 3~7 天前的用户文本消息，随机选 limit 条
+    // 策略：优先非技术短句（生活向），随机挑选（不是最近）
+    try {
+      if (!sessionPath || !fs.existsSync(sessionPath)) return [];
+      var raw = fs.readFileSync(sessionPath, "utf-8");
+      var now = Date.now();
+      var start = now - 7 * 24 * 3600 * 1000; // 7 天前
+      var end = now - 3 * 24 * 3600 * 1000;   // 3 天前
+      var techRe = /(git|mcp|插件|修复|测试|代码|文件|配置|路由|接口|token|key|部署|打包|命令|函数|错误|bug|发布|下载|github|仓库)/i;
+      var life = [], tech = [];
+      for (var line of raw.split("\n")) {
+        if (line.indexOf('"message"') < 0) continue;
+        try {
+          var ev = JSON.parse(line);
+          var m = ev.message;
+          if (!m || m.role !== "user") continue;
+          var ts = Date.parse(ev.timestamp || "");
+          if (isNaN(ts) || ts < start || ts > end) continue; // 只看 3~7 天前
+          var text = "";
+          if (typeof m.content === "string") text = m.content;
+          else if (Array.isArray(m.content)) {
+            text = m.content.filter(function (p) { return p && p.type === "text" && typeof p.text === "string"; }).map(function (p) { return p.text; }).join(" ");
+          }
+          text = text.trim();
+          if (text.length < 4 || text.length > 42) continue;
+          if (/^(\/|\{|\[)/.test(text)) continue;
+          if (/^(更新状态|好|ok|嗯|可以|继续|收到|行|对|是|嗯哼|来|试|👌|👍|😊|哈哈|好的|嗯嗯)$/i.test(text)) continue;
+          // 排除无意义输入：纯重复字母、纯符号、无汉字或英文单词的乱码
+          if (!/[\u4e00-\u9fa5A-Za-z]/.test(text)) continue;
+          if (/^([a-zA-Z])\1{3,}$/.test(text)) continue; // ababab → 重复单字符
+          text = text.replace(/\s+/g, " ");
+          (techRe.test(text) ? tech : life).push(text);
+        } catch (e) {}
+      }
+      // 去重 + 随机洗牌
+      function uniqShuffle(arr) {
+        var seen = {}, out = [];
+        for (var i = arr.length - 1; i >= 0; i--) { if (!seen[arr[i]]) { seen[arr[i]] = 1; out.push(arr[i]); } }
+        // Fisher–Yates 随机
+        for (var j = out.length - 1; j > 0; j--) {
+          var k = Math.floor(Math.random() * (j + 1));
+          var tmp = out[j]; out[j] = out[k]; out[k] = tmp;
+        }
+        return out;
+      }
+      return uniqShuffle(life).concat(uniqShuffle(tech)).slice(0, limit);
+    } catch (e) { return []; }
+  }
+  app.get("/api/fragments", (c) => {
+    var cfg = readConfig();
+    var sessionPath = resolveSessionPath(cfg);
+    var today = todayLocal();
+    var cached = null;
+    try { if (fs.existsSync(fragmentsPath)) cached = JSON.parse(fs.readFileSync(fragmentsPath, "utf-8")); } catch (e) {}
+    // 缓存有效（同一天）直接返回
+    if (cached && cached.date === today && Array.isArray(cached.fragments) && cached.fragments.length > 0) {
+      return c.json({ ok: true, date: today, fragments: cached.fragments, source: "cache", sessionPath: sessionPath });
+    }
+    // 否则重新提取（3~7 天前随机）
+    var frags = pickFragments(sessionPath, 3);
+    var result = { date: today, fragments: frags };
+    try { fs.writeFileSync(fragmentsPath, JSON.stringify(result, null, 2), "utf-8"); } catch (e) {}
+    return c.json({ ok: true, date: today, fragments: frags, source: frags.length ? "session" : "empty", sessionPath: sessionPath });
+  });
+
+
   // ---- 静态资源 (用户上传的图片) ----
   app.get("/api/assets/:file", (c) => {
     var file = c.req.param("file");
