@@ -27,15 +27,38 @@ export function createTriggerReply(opts) {
     if (now - lastInteraction < MIN_INTERVAL) return;
     lastInteraction = now;
     // 互动处理指引：告诉 Agent 这是什么事件、建议怎么回应
-    // （别的会话没有上下文，需要插件把“怎么处理”也传过去）
+    // 方案 A（精简版）：同一会话只注入一次完整指引，后续互动只加简短提示
+    // （完整指引每次重复会累积成上下文污染——长会话里重复 50 字×N 次）
+    // 完整指引让“陌生会话”知道怎么处理；简短版让“已知会话”不重复学习
     try {
       var GUIDE = {
         poke: "【互动事件：主人在状态面板戳了你一下。请以角色身份自然回应，并把互动写进状态：调用 san_update_status 更新 activity/bubble 等。】",
         send: "【互动事件：主人在状态面板给了你东西。请以角色身份收下并回应，必要时调用 san_update_status 更新状态。】",
         task: "【互动事件：主人想让你去打工赚摩拉。请调用 san_approve_entertainment_task 审批：先判断是否同意（可参考钱包余额），同意传 approved=true，拒绝传 false，并说明理由。】",
       };
+      var SHORT = {
+        poke: "【主人戳了你一下】",
+        send: "【主人给了你东西】",
+        task: "【主人想让你打工赚摩拉】",
+      };
       var guide = GUIDE[eventType];
-      if (guide) text = guide + " " + text;
+      if (guide) {
+        // 记录“完整指引已注入”的会话（用目标会话路径做 key，按天重置）
+        var guideCache = path.join(dataDir, "guide-tags.json");
+        var guideMap = {};
+        try { if (fs.existsSync(guideCache)) guideMap = JSON.parse(fs.readFileSync(guideCache, "utf-8")); } catch (e) {}
+        var today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+        // 目标会话路径此时可能还没解析出来，先用占位；下方解析出 fp 后补录
+        // 如果缓存里该会话今天已注入过完整指引 → 用简短版
+        var useShort = false;
+        try {
+          var fpPreview = null;
+          var cfgTmp = readConfig();
+          if (cfgTmp.targetSession && fs.existsSync(cfgTmp.targetSession)) fpPreview = cfgTmp.targetSession;
+          if (fpPreview && guideMap[fpPreview] === today) useShort = true;
+        } catch (e) {}
+        text = (useShort ? SHORT[eventType] : guide) + " " + text;
+      }
     } catch (e) {}
     var pluginCtx = c.get("pluginCtx");
     if (!pluginCtx || !pluginCtx.bus) return;
@@ -88,114 +111,40 @@ export function createTriggerReply(opts) {
     }
     if (!fp) return;
 
-    // 互动规则：注入当前时间（按会话记账，1 小时内同一会话只注一次）
-    // 时间戳是“锚点”不是“报时”——注入后让 Agent 靠对话节奏自然延续
+    // 补录：本次是否用了完整指引（决定下次是否走简短版）
+    // 只有当本次发送的是【完整指引】时才记录——简短版不覆盖记录（保持完整版已注入状态）
     try {
-      var tagCache = path.join(dataDir, "time-tags.json");
-      var tagMap = {};
-      try {
-        if (fs.existsSync(tagCache)) tagMap = JSON.parse(fs.readFileSync(tagCache, "utf-8"));
-      } catch (e) {}
-      var lastTag = tagMap[fp] || 0;
-      if (now - lastTag >= 60 * 60 * 1000) {
-        // 显式 Asia/Shanghai 时区，不依赖服务器默认时区
-        var d = new Date(now + 8 * 60 * 60 * 1000); // UTC+8 手动偏移
-        var week = ["日", "一", "二", "三", "四", "五", "六"];
-        var hh = (d.getUTCHours() < 10 ? "0" : "") + d.getUTCHours();
-        var mm = (d.getUTCMinutes() < 10 ? "0" : "") + d.getUTCMinutes();
-        var timeTag = "【现在是 " + (d.getUTCMonth() + 1) + "月" + d.getUTCDate() + "日 星期" + week[d.getUTCDay()] + " " + hh + ":" + mm + "】（时间仅作参考）";
-        text = timeTag + " " + text;
-        tagMap[fp] = now;
-        try {
-          fs.writeFileSync(tagCache, JSON.stringify(tagMap), "utf-8");
-        } catch (e) {}
+      var guideCache2 = path.join(dataDir, "guide-tags.json");
+      var guideMap2 = {};
+      try { if (fs.existsSync(guideCache2)) guideMap2 = JSON.parse(fs.readFileSync(guideCache2, "utf-8")); } catch (e) {}
+      var today2 = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+      // 前面决定 useShort 时已经读过缓存；这里在 fp 确定后，若本次用的是完整版则写入
+      // （用简短版时不写——因为完整版已注入过的标记应该保持）
+      if (guideMap2[fp] !== today2 && text.indexOf("互动事件：") >= 0) {
+        guideMap2[fp] = today2;
+        try { fs.writeFileSync(guideCache2, JSON.stringify(guideMap2), "utf-8"); } catch (e) {}
       }
     } catch (e) {}
 
-    // bridge/phone 会话：直接写文件（不在 Hana manifest 中，无法用 session:send）
-    // 兼容 Windows 反斜杠路径：将反斜杠统一转为正斜杠再检测
-    var fpNormalized = fp.replace(/\\/g, '/');
-    if (/\/bridge\/|\/phone\//.test(fpNormalized)) {
-      try {
-        var now2 = new Date().toISOString();
-        // 找到最后一条 message 的 id 作为 parentId
-        var parentId = null;
-        try {
-          var allLines = fs.readFileSync(fp, "utf-8").split("\n").filter(Boolean);
-          for (var li = allLines.length - 1; li >= 0; li--) {
-            try {
-              var ld = JSON.parse(allLines[li]);
-              if (ld.type === "message") { parentId = ld.id; break; }
-            } catch (e) {}
-          }
-        } catch (e) {}
-        var msgId = Math.random().toString(36).substring(2, 10);
-        var msgLine = JSON.stringify({
-          type: "message",
-          id: msgId,
-          parentId: parentId,
-          timestamp: now2,
-          message: { role: "user", content: [{ type: "text", text: text }] }
-        });
-        fs.appendFileSync(fp, msgLine + "\n", "utf-8");
-        log?.info?.("[状态面板] bridge 消息已写入:", fp);
-        // 触发推送事件通知桥接插件
-        pluginCtx.bus.emit("session:updated", { sessionPath: fp }).catch(function () {});
-      } catch (e) {
-        log?.error?.("[状态面板] bridge 写入失败:", e.message);
-      }
-      return;
-    }
+    // 时间策略（2026-08-08 优化）：不再注入具体时间戳，改为指引模型用 current_status 实时查
+    // 原因：注入时间会写入会话 → 累积污染上下文 + 过期误导（旧时间被当现在）
+    // current_status 实时查询：零污染、永远最新，用完即弃
+    // 只保留“事件锚点”语义：告诉模型这是互动事件，判断时间请用实时工具
+    try {
+      var timeGuide = "【时间提示：判断当前时间/日期请调用 current_status 实时查询，勿参考本会话历史中的旧时间】";
+      text = timeGuide + " " + text;
+      // 清理旧的时间标签缓存（不再使用，避免残留）
+      try { var oldTag = path.join(dataDir, "time-tags.json"); if (fs.existsSync(oldTag)) fs.unlinkSync(oldTag); } catch (e) {}
+    } catch (e) {}
 
-    // 普通会话：通过 Hana session:send
-    var lineCount = 0;
-    try { lineCount = fs.readFileSync(fp, "utf-8").split("\n").filter(function(l){return l.trim();}).length; } catch(e){}
+    // 普通会话：通过 Hana session:send（主动回复的唯一可靠触发方式）
+    // 注意：session:send 路径缺少 isStreaming:false 结束事件（BUG-2026-08-07-001），
+    // 会导致前端流点指示器残留——但这是 Hana 机制缺陷，插件无法补发该事件。
+    // 不能改用"直接写文件"：emit session:updated 无人监听，无法触发回复。
+    // 取舍：保功能（主动回复）优先，流点残留作为已知限制记录。
     pluginCtx.bus.request("session:send", { text: text, sessionPath: fp })
       .then(function () {
-        // 轮询 session 文件，等 output 完成
-        var pollTimer = setInterval(function () {
-          try {
-            var lines = fs.readFileSync(fp, "utf-8").split("\n").filter(function(l){return l.trim();});
-            if (lines.length > lineCount) {
-              var lastRaw = lines[lines.length - 1];
-              var last = null;
-              try { last = JSON.parse(lastRaw); } catch (ex) { last = { raw: lastRaw }; }
-              var msg = last.message || last.d || last;
-              // 有些实现将 stopReason 写在顶层（last）而非 message 内，兼容多种字段命名
-              var stopReason = last.stopReason || last.stop_reason || (msg && (msg.stopReason || msg.stop_reason));
-              var role = (msg && (msg.role || msg.message && msg.message.role)) || last.role || null;
-
-              // 写入调试文件，便于后续分析（非阻塞）
-              try {
-                var debugPath = path.join(dataDir, "debug-session-sample.txt");
-                var dbg = {
-                  ts: new Date().toISOString(),
-                  sessionPath: fp,
-                  totalLines: lines.length,
-                  lastRaw: lastRaw,
-                  parsedLast: last,
-                  detectedRole: role,
-                  detectedStopReason: stopReason,
-                  lineCountBefore: lineCount
-                };
-                fs.appendFileSync(debugPath, JSON.stringify(dbg) + "\n", "utf-8");
-              } catch (exDbg) { /* ignore debug write errors */ }
-
-              // 只有 role 为 assistant 且 stopReason 为 "stop" 时才视为最终回复
-              if (role === "assistant" && stopReason === "stop") {
-                clearInterval(pollTimer);
-                pluginCtx.bus.request("session:abort", { sessionPath: fp }).catch(function(){});
-              }
-            }
-          } catch(e){
-            try {
-              var debugErrPath = path.join(dataDir, "debug-session-errors.txt");
-              fs.appendFileSync(debugErrPath, new Date().toISOString() + " ERROR: " + (e && e.stack ? e.stack : String(e)) + "\n", "utf-8");
-            } catch(_) {}
-          }
-        }, 500);
-        // 安全兜底：30 秒后强制停止
-        setTimeout(function () { if (typeof pollTimer !== 'undefined') clearInterval(pollTimer); }, 30000);
+        log?.info?.("[状态面板] 互动消息已发送 (session:send):", fp);
       })
       .catch(function (err) {
         log?.error?.("[状态面板] session:send 失败", err?.message || err);
