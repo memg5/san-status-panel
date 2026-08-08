@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
    猫猫生活区  ·  草香主题 (Grass Atelier)
    桌面底色 #F5F8F3 · 纸片便签 #FCFEF9 · 账本 #FBFDF7
    胶带草香绿 · 阴影冷绿调 · 光晕淡绿
@@ -250,6 +250,10 @@ body::after {
   letter-spacing: 2px;
   white-space: nowrap;
 }
+/* 名字长度分档：1-4 字正常，5-6 微缩，7-8 再缩（上限 8 字，超长截断由设置侧限制） */
+.note-sig.note-name-1 { font-size: 13px; letter-spacing: 2px; }
+.note-sig.note-name-2 { font-size: 12px; letter-spacing: 1.2px; }
+.note-sig.note-name-3 { font-size: 11px; letter-spacing: 0.6px; }
 /* 右下角小立绘（拍立得风格：白边相框 + 浅竹绿描边 + 立体层次 + 左上胶带） */
 .note-photo {
   position: absolute;
@@ -626,7 +630,8 @@ body::after {
   flex-shrink: 0;
   min-width: 58px;
   font-size: 11px;
-  color: var(--ink-pale);
+  color: var(--grass-deep);
+  font-weight: 600;
   letter-spacing: 0.5px;
 }
 .ledger-row.me .ledger-time { color: var(--grass-deep); font-weight: 600; }

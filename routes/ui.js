@@ -94,7 +94,7 @@ export default function (app, ctx) {
   <title>桑多涅状态</title>
   <style>/* CSS_INLINE */</style>
 </head>
-<body>
+<body data-surface="/* SURFACE_KIND */">
   <!-- ====== 主面板 ====== -->
   <div class="panel">
     <div class="panel-bg" id="panelBg"></div>
@@ -177,6 +177,10 @@ export default function (app, ctx) {
           <button id="uploadBgBtn" style="background:none;border:1px solid var(--text-accent);color:var(--text-accent);border-radius:14px;padding:4px 12px;font-size:12px;cursor:pointer">\u4e0a\u4f20</button>
         </div>
         <div class="setting-item">
+          <span>\u4e0a\u4f20\u7acb\u7ed8</span>
+          <button id="uploadNotePhotoBtn" style="background:none;border:1px solid var(--text-accent);color:var(--text-accent);border-radius:14px;padding:4px 12px;font-size:12px;cursor:pointer">\u4e0a\u4f20</button>
+        </div>
+        <div class="setting-item">
           <span>\u5361\u7247\u900f\u660e\u5ea6</span>
           <div style="display:flex;align-items:center;gap:8px">
             <input type="range" id="opacitySlider" class="slider" min="30" max="100" value="65">
@@ -207,7 +211,7 @@ export default function (app, ctx) {
           <button id="locateBtn" style="background:none;border:1px solid var(--text-accent);color:var(--text-accent);border-radius:14px;padding:4px 12px;font-size:12px;cursor:pointer">获取</button>
         </div>
         <div class="setting-item" style="font-size:11px;color:#bbb;line-height:1.5">
-          <span>会请求浏览器定位权限，获取后天气按当前位置显示。默认使用内置坐标。</span>
+          <span>会请求浏览器定位权限，获取后天气按当前位置显示。默认坐标（可配置）。</span>
         </div>
       </div>
 
@@ -282,6 +286,37 @@ export default function (app, ctx) {
     </div>
   </div>
 
+  <!-- ====== 立绘调整弹窗 ====== -->
+  <div class="adjust-modal" id="notePhotoAdjustModal">
+    <div class="adjust-panel">
+      <div class="adjust-header">
+        <span>\u8c03\u6574\u7acb\u7ed8</span>
+        <span class="adjust-tip">\u62d6\u62fd\u79fb\u52a8 \u00b7 \u6eda\u8f6e\u7f29\u653e</span>
+      </div>
+      <div class="adjust-preview note-photo-preview" id="notePhotoPreview">
+        <div class="adjust-preview-bg" id="notePhotoPreviewBg"></div>
+      </div>
+      <div class="adjust-controls">
+        <div class="slider-row">
+          <span>\u56fe\u7247\u7f29\u653e</span>
+          <input type="range" id="notePhotoScaleSlider" class="slider" min="100" max="300" value="120">
+          <span class="slider-value" id="notePhotoScaleValue">120%</span>
+        </div>
+      </div>
+      <div class="adjust-footer">
+        <div class="footer-left">
+          <label class="btn-reselect">\u91cd\u65b0\u9009\u62e9
+            <input type="file" id="notePhotoReselect" accept="image/*" hidden>
+          </label>
+        </div>
+        <div class="footer-right">
+          <button class="btn-cancel" id="notePhotoAdjustCancel">\u53d6\u6d88</button>
+          <button class="btn-confirm" id="notePhotoAdjustConfirm">\u786e\u5b9a</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ====== 脚本 ====== -->
   <!-- 核心: Token 拦截 + 状态轮询 + SSE -->
   <script>
@@ -327,18 +362,19 @@ export default function (app, ctx) {
   //  路由定义
   // ================================================================
   // ---- Widget 页面 ----
-  function inlineHTML() {
+  function inlineHTML(surfaceKind) {
     var css = "", wjs = "", sjs = "";
     try { css = fs.readFileSync(path.join(pluginAssets, "style.css"), "utf-8"); } catch(e){}
     try { wjs = fs.readFileSync(path.join(pluginAssets, "widget.bundle.js"), "utf-8"); } catch(e){}
     try { sjs = fs.readFileSync(path.join(pluginAssets, "settings.js"), "utf-8"); } catch(e){}
     return HTML
+      .replace("/* SURFACE_KIND */", surfaceKind === "card" ? "card" : "widget")
       .replace("/* CSS_INLINE */", css)
       .replace("/* WIDGET_JS_INLINE */", wjs)
       .replace("/* SETTINGS_JS_INLINE */", sjs);
   }
-  app.get("/widget", (c) => c.html(inlineHTML()));
-  app.get("/card/status", (c) => c.html(inlineHTML()));
+  app.get("/widget", (c) => c.html(inlineHTML("widget")));
+  app.get("/card/status", (c) => c.html(inlineHTML("card")));
 
   // ---- SSE 实时推送 ----
   app.get("/api/status-stream", (c) => {
@@ -385,6 +421,8 @@ export default function (app, ctx) {
       cardOpacity: cfg.cardOpacity || 65,
       bgConfig: cfg.bgConfig || null,
       avatarConfig: cfg.avatarConfig || null,
+      notePhoto: cfg.notePhoto || null,
+      notePhotoConfig: cfg.notePhotoConfig || null,
       location: cfg.location || null
     });
   });
@@ -403,13 +441,14 @@ export default function (app, ctx) {
 
   // ---- 位置读取（天气系统用） ----
   // 位置由设置面板「获取当前位置」通过浏览器 Geolocation 获取并存入 config.location。
-  // 读取时使用内置默认坐标，没有定位时使用。
+  // 读取时默认坐标（可配置），没有定位时使用。
   app.get("/api/location", (c) => {
     var cfg = readConfig();
-    var loc = cfg.location || { city: "默认", region: "", country: "", lat: 29.51, lon: 109.41, source: "default" };
+    var loc = cfg.location || { city: "默认坐标", region: "湖北", country: "CN", lat: 29.51, lon: 109.41, source: "default" };
     return c.json({ ok: true, location: loc });
   });
 
+  // ================================================================
   //  记忆碎片（每日 3 句）：读取当前会话的当日对话，提取用户短句
   // ================================================================
   const fragmentsPath = path.join(dataDir, "daily-fragments.json");
@@ -501,7 +540,6 @@ export default function (app, ctx) {
     return c.json({ ok: true, date: today, fragments: frags, source: frags.length ? "session" : "empty", sessionPath: sessionPath });
   });
 
-
   // ---- 静态资源 (用户上传的图片) ----
   app.get("/api/assets/:file", (c) => {
     var file = c.req.param("file");
@@ -537,11 +575,14 @@ export default function (app, ctx) {
       var fn = type + "_" + Date.now() + ext;
       fs.writeFileSync(path.join(assetsDir, fn), buf);
       var cfg = readConfig();
-      var oldKey = type === "bg" ? cfg.bg : cfg.avatar;
+      // 立绘：独立 key（notePhoto），与 bg/avatar 互不覆盖
+      var oldKey = type === "bg" ? cfg.bg : type === "avatar" ? cfg.avatar : type === "note-photo" ? cfg.notePhoto : null;
       if (oldKey) {
         try { fs.unlinkSync(path.join(assetsDir, oldKey)); } catch (e) {}
       }
-      cfg[type === "bg" ? "bg" : "avatar"] = fn;
+      if (type === "bg") cfg.bg = fn;
+      else if (type === "avatar") cfg.avatar = fn;
+      else if (type === "note-photo") cfg.notePhoto = fn;
       saveConfig(cfg);
       return c.json({ ok: true, url: "/api/plugins/san-status-panel/api/assets/" + fn });
     } catch (e) {

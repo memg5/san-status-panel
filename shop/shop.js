@@ -157,6 +157,38 @@
     var nd = $("noteDate");
     var nt = $("noteText");
     var todayYMD = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    // 便签名字：读取状态面板设置（config.name），按长度分档自适应
+    // 兜底：读不到或用默认值时就显示"桑多涅"
+    var noteName = "桑多涅";
+    // 名字应用（提升为可复用：初始加载 + 轮询同步共用）
+    function applyNoteNameTo(name) {
+      noteName = name || "桑多涅";
+      // 签名
+      var ns = $("noteSig");
+      if (ns) ns.textContent = "— " + noteName + " —";
+      // 兜底文案里的名字
+      var len = noteName.length;
+      var cls = "note-name-1";
+      if (len <= 4) cls = "note-name-1";       // 正常
+      else if (len <= 6) cls = "note-name-2";   // 5-6 字：微缩
+      else if (len <= 8) cls = "note-name-3";   // 7-8 字：再缩
+      if (ns) ns.className = "note-sig " + cls;
+      // 更新兜底文案（如果还没写今天的便签）
+      if (nt && nt.textContent.indexOf("还没写今天的便签") >= 0) {
+        nt.textContent = noteName + "还没写今天的便签…";
+      }
+    }
+    window.__noteApplyName = applyNoteNameTo;
+    try {
+      fetch(reqUrl("/api/config"))
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (j && typeof j.name === "string" && j.name.trim()) {
+            applyNoteNameTo(j.name.trim());
+          }
+        })
+        .catch(function () {});
+    } catch (e) {}
     // 文案池兜底文案（桑多涅没写时用）
     var daySeed = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
     var line = NOTE_LINES[daySeed % NOTE_LINES.length];
@@ -774,17 +806,65 @@
   }, 30000);
 
 // ========== 启动 ==========
-  // 便签立绘已内联在 HTML（base64），无需动态加载。
-  // 若 SANPIC 未被替换（图片缺失），回退草香渐变。
-  (function () {
+  // 便签立绘：优先读用户上传的立绘（notePhoto + notePhotoConfig），
+  // 无上传则用内联 base64（SANPIC）；图片缺失回退草香渐变。
+  // 抽为可复用函数：初始加载 + 轮询同步共用
+  function loadNotePhoto(j) {
     var nImg = document.querySelector(".note-photo-img");
-    if (nImg) {
-      var nBg = nImg.style.backgroundImage || "";
-      if (nBg.indexOf("SANPIC") >= 0 || !nBg) {
-        nImg.style.backgroundImage = "linear-gradient(160deg, #DCE9CC 0%, #B8D4A8 60%, #8FB978 100%)";
-      }
+    if (!nImg) return;
+    var nBg = nImg.style.backgroundImage || "";
+    if (j && j.notePhoto) {
+      // notePhoto 已是完整路径（/api/plugins/san-status-panel/api/assets/...），直接拼 token
+      var url = j.notePhoto;
+      var m = (window.location.search || "").match(/[?&]token=([^&]+)/);
+      if (m) url += (url.indexOf("?") >= 0 ? "&" : "?") + "token=" + encodeURIComponent(m[1]);
+      var probe = new Image();
+      probe.onload = function () {
+        var cfg = j.notePhotoConfig || { posX: 50, posY: 50, scale: 120 };
+        // 一次性设置完整 background（避免 CSS 简写与内联子属性冲突）
+        nImg.style.background = "url('" + url + "') " + cfg.posX + "% " + cfg.posY + "% / " + cfg.scale + "% no-repeat";
+      };
+      probe.onerror = function () {
+        if (nBg.indexOf("SANPIC") >= 0 || !nBg) {
+          nImg.style.backgroundImage = "linear-gradient(160deg, #DCE9CC 0%, #B8D4A8 60%, #8FB978 100%)";
+        }
+      };
+      probe.src = url;
+      return;
     }
-  })();
+    if (nBg.indexOf("SANPIC") >= 0 || !nBg) {
+      nImg.style.backgroundImage = "linear-gradient(160deg, #DCE9CC 0%, #B8D4A8 60%, #8FB978 100%)";
+    }
+  }
+  window.__noteLoadPhoto = loadNotePhoto;
+
+  // 配置同步轮询：字段级比对（name / notePhoto），变了才更新，5 秒一次
+  var lastCfgName = "";
+  var lastCfgPhoto = "";
+  function syncConfig() {
+    fetch(reqUrl("/api/config"))
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j) return;
+        // 名字：只在变化时应用
+        var name = (j.name || "").trim();
+        if (name && name !== lastCfgName) {
+          lastCfgName = name;
+          if (window.__noteApplyName) window.__noteApplyName(name);
+        }
+        // 立绘：只在变化时重载
+        var photo = j.notePhoto || "";
+        if (photo !== lastCfgPhoto) {
+          lastCfgPhoto = photo;
+          loadNotePhoto(j);
+        }
+      })
+      .catch(function () {});
+  }
+
+  // 初始同步 + 轮询
+  syncConfig();
+  setInterval(syncConfig, 5000);
 
   loadAll();
   setInterval(updateCooldownTicker, 1000);

@@ -66,10 +66,17 @@ function loadPanelConfig() {
     return m ? decodeURIComponent(m[1]) : "";
   })();
 
+  // 对话流卡片场景：不加载背景图，保持干净底色，与 widget 区分
+  var isCardSurface = document.body && document.body.getAttribute("data-surface") === "card";
+  if (isCardSurface) {
+    var bgElC = document.getElementById("panelBg");
+    if (bgElC) bgElC.style.display = "none";
+  }
+
   fetch("/api/plugins/san-status-panel/api/config")
     .then(function (r) { return r.json(); })
     .then(function (d) {
-      if (d.bg) {
+      if (d.bg && !isCardSurface) {
         var bgEl = document.getElementById("panelBg");
         if (d.bgConfig) {
           bgEl.style.background = "url(" + d.bg + "?token=" + tk + ") " + d.bgConfig.posX + "% " + d.bgConfig.posY + "% / " + d.bgConfig.scale + "% no-repeat";
@@ -428,6 +435,107 @@ function uploadBg() {
   input.click();
 }
 document.getElementById("uploadBgBtn").onclick = uploadBg;
+
+// --- 立绘上传（完整版：选图 → 弹窗预览 → 拖拽/缩放 → 确认上传） ---
+var tempNotePhotoConfig = { image: null, posX: 50, posY: 50, scale: 120, aspect: null };
+var savedNotePhotoConfig = { image: null, posX: 50, posY: 50, scale: 120 };
+
+function applyNotePhotoPreview(config) {
+  var p = document.getElementById("notePhotoPreviewBg");
+  if (!p) return;
+  if (config.image) p.style.backgroundImage = "url(" + config.image + ")";
+  p.style.backgroundPosition = config.posX + "% " + config.posY + "%";
+  p.style.backgroundSize = config.scale + "%";
+}
+
+function openNotePhotoAdjustModal(imgSrc) {
+  Object.assign(tempNotePhotoConfig, { image: imgSrc, posX: 50, posY: 50, scale: 120 });
+  loadImageAspect(imgSrc, tempNotePhotoConfig);
+  applyNotePhotoPreview(tempNotePhotoConfig);
+  var sl = document.getElementById("notePhotoScaleSlider");
+  if (sl) { sl.value = 120; }
+  var sv = document.getElementById("notePhotoScaleValue");
+  if (sv) { sv.textContent = "120%"; }
+  var pv = document.getElementById("notePhotoPreview");
+  if (pv) {
+    var pvSize = Math.min(240, document.querySelector(".panel").offsetWidth - 100);
+    pv.style.width = pvSize + "px";
+    pv.style.height = Math.round(pvSize * 1.18) + "px";
+  }
+  document.getElementById("notePhotoAdjustModal").classList.add("show");
+}
+
+var uploadNotePhoto = function () {
+  var input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.onchange = function (e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      openNotePhotoAdjustModal(ev.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+};
+document.getElementById("uploadNotePhotoBtn").onclick = uploadNotePhoto;
+
+// 重新选择
+if (document.getElementById("notePhotoReselect")) {
+  document.getElementById("notePhotoReselect").onchange = function (e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      openNotePhotoAdjustModal(ev.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+}
+// 取消
+if (document.getElementById("notePhotoAdjustCancel")) {
+  document.getElementById("notePhotoAdjustCancel").onclick = function () {
+    document.getElementById("notePhotoAdjustModal").classList.remove("show");
+  };
+}
+// 确认上传
+if (document.getElementById("notePhotoAdjustConfirm")) {
+  document.getElementById("notePhotoAdjustConfirm").onclick = function () {
+    fetch("/api/plugins/san-status-panel/api/assets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "note-photo", data: tempNotePhotoConfig.image })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.ok) {
+          savedNotePhotoConfig = { image: d.url, posX: tempNotePhotoConfig.posX, posY: tempNotePhotoConfig.posY, scale: tempNotePhotoConfig.scale };
+          fetch("/api/plugins/san-status-panel/api/config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ notePhoto: d.url, notePhotoConfig: savedNotePhotoConfig })
+          });
+          var btn = document.getElementById("uploadNotePhotoBtn");
+          if (btn) {
+            btn.textContent = "\u2713 \u5df2\u4e0a\u4f20";
+            btn.style.borderColor = "#2E7D32";
+            btn.style.color = "#2E7D32";
+            setTimeout(function () {
+              btn.textContent = "\u4e0a\u4f20";
+              btn.style.borderColor = "";
+              btn.style.color = "";
+            }, 3000);
+          }
+        }
+        document.getElementById("notePhotoAdjustModal").classList.remove("show");
+      });
+  };
+}
+// 初始化拖拽 + 滚轮缩放
+initDrag(document.getElementById("notePhotoPreview"), tempNotePhotoConfig, function () { applyNotePhotoPreview(tempNotePhotoConfig); });
+initWheelZoom(document.getElementById("notePhotoPreview"), tempNotePhotoConfig, document.getElementById("notePhotoScaleSlider"), document.getElementById("notePhotoScaleValue"), function () { applyNotePhotoPreview(tempNotePhotoConfig); }, 100, 300);
 
 // --- 背景调整弹窗 ---
 document.getElementById("bgReselect").onchange = function (e) {
