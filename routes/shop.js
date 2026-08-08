@@ -248,15 +248,22 @@ export default function (app, ctx) {
       let page = html
         .replace("/* INLINE_CSS */", css)
         .replace("/* INLINE_JS */", js);
-      // 女仆立绘：内联 base64，避免 iframe 静态资源鉴权 403
-      // 发布版不附带立绘图片：缺失时优雅降级（相框留白）
+      // 女仆立绘：优先读用户上传的立绘（config.notePhoto），无则默认 sandone.jpg
+      // 内联 base64，避免 iframe 静态资源鉴权 403
       try {
-        const picPath = path.join(shopDir, "sandone.jpg");
+        let picPath = path.join(shopDir, "sandone.jpg");
+        try {
+          const cfg = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+          if (cfg.notePhoto) {
+            const up = path.join(dataDir, "assets", path.basename(cfg.notePhoto));
+            if (fs.existsSync(up)) picPath = up;
+          }
+        } catch (e) {}
         if (fs.existsSync(picPath)) {
+          const ext = path.extname(picPath).toLowerCase();
+          const mime = ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : ext === ".gif" ? "image/gif" : "image/jpeg";
           const b64 = fs.readFileSync(picPath).toString("base64");
-          page = page.split("/* SANPIC */").join("data:image/jpeg;base64," + b64);
-        } else {
-          page = page.split("/* SANPIC */").join("");
+          page = page.split("/* SANPIC */").join("data:" + mime + ";base64," + b64);
         }
       } catch (e) {}
       return page;
