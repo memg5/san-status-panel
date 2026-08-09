@@ -3,7 +3,6 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { TextEncoder } from "node:util";
 import { createTriggerReply } from "./trigger-reply.js";
 import { nowStamp, nowLocal } from "../lib/now.js";
 export default function (app, ctx) {
@@ -29,19 +28,11 @@ export default function (app, ctx) {
   }
 
   // ================================================================
-  //  SSE 实时推送
+  //  状态推送策略（2026-08-09 改为短轮询）
   // ================================================================
-  const sseClients = new Set();
-  const statusPath = path.join(dataDir, "status.json");
-  try {
-    fs.watch(statusPath, (eventType) => {
-      if (eventType === "change") {
-        for (const w of sseClients) {
-          w.write(new TextEncoder().encode("event: refresh\ndata: {}\n\n")).catch(() => sseClients.delete(w));
-        }
-      }
-    });
-  } catch (e) {}
+  // 原 SSE 长连接方案在 Hana 0.446.6 下会导致切换会话时 iframe 重挂载风暴
+  // （每次切换开 5-50 条连接），最终卡死。现改为前端 setInterval 轮询 /api/status，
+  // status.json 仅几百字节，轮询开销可忽略。
 
   // 触发 Agent 回复（共享逻辑：poke / send / 娱乐任务申请 共用）
   const tryTriggerReply = createTriggerReply({ dataDir, configPath, log: ctx.log });
@@ -53,10 +44,7 @@ export default function (app, ctx) {
     try {
       if (!fs.existsSync(filePath)) return null;
       var content = fs.readFileSync(filePath, "utf-8");
-      // widget.bundle.js: 移除冗余的轮询 (SSE 已处理实时更新)
-      if (filePath.endsWith("widget.bundle.js")) {
-        content = content.replace("setInterval(loadStatus, 5e3);", "");
-      }
+      // widget.bundle.js: 保留轮询（短轮询方案，不再移除）
       return new Response(content, {
         headers: {
           "Content-Type": contentType,
@@ -344,10 +332,8 @@ export default function (app, ctx) {
       }).then(function () { setTimeout(loadStatus, 800); })
         .catch(function () {});
     };
-    var es = new EventSource(
-      window.location.origin + "/api/plugins/san-status-panel/api/status-stream?token=" + encodeURIComponent(t)
-    );
-    es.addEventListener("refresh", function () { loadStatus(); });
+    // 短轮询方案（2026-08-09）：SSE 长连接在 Hana 0.446.6 切换会话时会风暴式累积导致卡死
+    var pt = setInterval(function () { loadStatus(); }, 3000);
   </script>
 
   <!-- Widget 核心渲染逻辑 -->
@@ -376,26 +362,10 @@ export default function (app, ctx) {
   app.get("/widget", (c) => c.html(inlineHTML("widget")));
   app.get("/card/status", (c) => c.html(inlineHTML("card")));
 
-  // ---- SSE 实时推送 ----
-  app.get("/api/status-stream", (c) => {
-    const { readable, writable } = new TransformStream();
-    const writer = writable.getWriter();
-    sseClients.add(writer);
-    writer.write(new TextEncoder().encode("event: connected\ndata: {}\n\n"));
-    c.req.raw.signal.addEventListener("abort", () => {
-      sseClients.delete(writer);
-      writer.close().catch(() => {});
-    });
-    return new Response(readable, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive"
-      }
-    });
-  });
-
-  // ---- 状态查询 ----
+  // ---- 状态查询（短轮询方案 2026-08-09）----
+  // 背景：SSE 长连接在 Hana 0.446.6 切换会话时会随 iframe 重挂载风暴式创建，
+  //   连接数瞬间冲到 50+ 导致卡死。status.json 是几百字节的小文件，
+  //   短轮询开销可忽略，且不产生长连接累积问题。
   app.get("/api/status", (c) => {
     c.header("Access-Control-Allow-Origin", "*");
     try {
@@ -691,11 +661,10 @@ export default function (app, ctx) {
                 slabel = tm ? tm[1].replace(/T/, " ") : bn.slice(0, 16);
               }
               var isActive = fp === cfg.targetSession || sid === cfg.targetSession || fp === cfg.targetSession;
-              var isBridge = /bridge|phone/.test(fp);
-              // bridge/phone 会话加前缀方便识别
-              if (isBridge) {
-                slabel = "微信 · " + slabel;
-              }
+              // 过滤 bridge/phone 会话（微信/QQ 等外部连接）：不在设置里显示
+              // （2026-08-09 用户要求：外部连接的会话列表不需要展示）
+              if (/bridge|phone/.test(fp)) continue;
+              var isBridge = false;
               sessions.push({ id: fp, sid: sid, label: slabel, active: isActive, bridge: isBridge });
             }
           }

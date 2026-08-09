@@ -519,3 +519,5 @@ window.__sandoSend = sendItem;
   // 5 次都失败，显示错误
   document.getElementById("content").innerHTML = '⚠️ 状态加载失败';
 })();
+// 短轮询（2026-08-09）：SSE 长连接方案在 Hana 0.446.6 下会导致切换会话卡死，改为轮询
+setInterval(loadStatus, 4000);
