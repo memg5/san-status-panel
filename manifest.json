@@ -1,7 +1,7 @@
 {
   "manifestVersion": 1,
   "id": "san-status-panel",
-  "name": "桑多涅 · 状态面板",
+  "name": "桑多涅 · 出品面板",
   "version": "1.2.1",
   "description": "桑多涅角色状态面板。支持自定义头像/背景、会话切换、互动反馈，模块化架构便于维护。",
   "author": "桑多涅 · 枫丹工坊",
@@ -18,7 +18,7 @@
   },
   "contributes": {
     "widget": {
-      "title": "桑多涅 · 状态",
+      "title": "桑多涅 · 出品",
       "icon": "<svg viewBox=\"0 0 24 24\"><text x=\"12\" y=\"17\" text-anchor=\"middle\" font-size=\"16\" fill=\"currentColor\" font-weight=\"600\">桑</text></svg>",
       "route": "/widget"
     },
