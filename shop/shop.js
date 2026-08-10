@@ -368,7 +368,7 @@
     var names = p.names || [];
     var merged = mergeItems(names);
     var listTxt = merged.length ? merged.map(itemPhrase).join("、") : "些小东西";
-    var priceTxt = p.price != null ? p.price + " 摩拉" : "没花钱";
+    var priceTxt = p.price != null ? Math.round(Number(p.price) || 0) + " 摩拉" : "没花钱";
     var isMe = p.by === "sandrone";
     var r = p.reason || "";
     var pick = function (arr) {
@@ -486,6 +486,8 @@
     var sorted = list.slice().sort(function (a, b) {
       return String(b.at || "").localeCompare(String(a.at || ""));
     });
+    // 只显示最近 10 条（更早的留在后端数据里，界面不渲染）
+    if (sorted.length > 10) sorted = sorted.slice(0, 10);
     // 时间线：上最新、下最早。切成两半：新的一半放右列，旧的一半放左列。
     var half = Math.ceil(sorted.length / 2);
     var rightCol = sorted.slice(0, half);   // 新的一半 → 右列（顶部最新）
@@ -517,7 +519,9 @@
 
   // ========== 摩拉余额（玩耍区右上角） ==========
   function renderWallet() {
-    if (moraCount) moraCount.textContent = state.mora;
+    // 摩拉取整显示：浮点精度（145.79999999999998）不暴露给用户
+    var v = Math.round(Number(state.mora) || 0);
+    if (moraCount) moraCount.textContent = v;
   }
 
   // ========== 学习区（书桌角：计时器） ==========
