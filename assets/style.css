@@ -75,6 +75,12 @@ body[data-surface="card"] .panel {
 body[data-surface="card"] .panel-content {
   height: 100%;
   overflow-y: auto;
+  /* 隐藏滚动条（保留滚动功能，视觉干净） */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+body[data-surface="card"] .panel-content::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
 }
 .panel-bg.has-image {
   background-size: cover;

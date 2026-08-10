@@ -4,6 +4,15 @@
    胶带草香绿 · 阴影冷绿调 · 光晕淡绿
    ============================================================ */
 
+/* 隐藏滚动条（保留滚动功能，视觉干净） */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+*::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
 /* ── Design Tokens ── */
 :root {
   /* 草香背景三层 */
