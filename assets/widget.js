@@ -34,7 +34,11 @@ function render(data) {
     <div class="ok">🕐 更新于 ${esc(updated)}</div>
   `;
 
-  hana.ui.resize({ height: document.body.scrollHeight + 20 });
+  // 只首次 resize：报告固定高度，内容变化不反复拉伸（对话流卡片不再拉长卡顿）
+  if (!window.__sandoResized) {
+    hana.ui.resize({ height: 300 });
+    window.__sandoResized = true;
+  }
 }
 
 async function loadStatus() {

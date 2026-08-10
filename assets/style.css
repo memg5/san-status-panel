@@ -68,8 +68,8 @@ body[data-surface="card"] .panel-bg {
 }
 body[data-surface="card"] .panel {
   max-width: 420px;
-  /* 固定卡片高度：锁定视口，内容超出时卡片内部滚动，页面不滚 */
-  height: 100vh;
+  /* 对话流卡片：固定合理高度（容纳状态卡+按钮），内容变化不拉长；超出内部滚动 */
+  height: 300px;
   min-height: 0;
 }
 body[data-surface="card"] .panel-content {
