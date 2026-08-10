@@ -686,7 +686,9 @@ export default function (app, ctx) {
       actions.push({ action: "poke", timestamp: nowStamp(), tsLocal: nowLocal() });
       if (actions.length > 50) actions = actions.slice(-50);
       fs.writeFileSync(actionsPath, JSON.stringify(actions, null, 2), "utf-8");
-      tryTriggerReply(c, "你戳了桑多涅一下。", "poke");
+      // 触发文本：名字动态读取（config.name），与便签/互动指引一致
+      var cfgName = (readConfig() || {}).name || "桑多涅";
+      tryTriggerReply(c, "你戳了" + cfgName + "一下。", "poke");
       return c.json({ ok: true });
     } catch (e) {
       return c.json({ ok: false }, 500);
@@ -704,7 +706,8 @@ export default function (app, ctx) {
       actions.push({ action: "send", item: item, timestamp: nowStamp(), tsLocal: nowLocal() });
       if (actions.length > 50) actions = actions.slice(-50);
       fs.writeFileSync(actionsPath, JSON.stringify(actions, null, 2), "utf-8");
-      tryTriggerReply(c, "你给了桑多涅 " + (item || "东西"), "send");
+      var cfgName2 = (readConfig() || {}).name || "桑多涅";
+      tryTriggerReply(c, "你给了" + cfgName2 + " " + (item || "东西"), "send");
       return c.json({ ok: true });
     } catch (e) {
       return c.json({ ok: false }, 500);

@@ -111,20 +111,38 @@ export function createTriggerReply(opts) {
     var now = Date.now();
     if (now - lastInteraction < MIN_INTERVAL) return;
     lastInteraction = now;
+    // UI 显示文本：无信息量颜文字池（按事件类型轮换，不替用户/角色说话）
+    // 第三方事件提示定位：只表达“互动已触发”的情绪，不带语义负担
+    var KAOMOJI = {
+      poke: ["ฅ(^•ﻌ•^)ฅ", "( ͡° ͜ʖ ͡°)", "(๑•̀ㅂ•́)و✧", "ヾ(￣▽￣)", "(*´∀`*)", "ヽ(・∀・)ﾉ"],
+      send: ["(っ˘ڡ˘ς)", "(๑´ڡ`๑)", "〜(꒪꒳꒪)〜", "(≧ڡ≦*)", "(￣ρ￣)", "(๑•̀ㅂ•́)و✧"],
+      task: ["(・ω・)ノ", "(ง •̀_•́)ง", "٩(ˊᗜˋ*)و", "ヾ(≧▽≦*)o", "(๑•̀ㅂ•́)و✧", "ヽ(・∀・)ﾉ"],
+    };
+    // 随机选一个颜文字（不重复连续两次）
+    var pool = KAOMOJI[eventType] || KAOMOJI.poke;
+    var kaomoji = pool[Math.floor(Math.random() * pool.length)];
     // 互动处理指引：告诉 Agent 这是什么事件、建议怎么回应
     // 方案 A（精简版）：同一会话只注入一次完整指引，后续互动只加简短提示
     // （完整指引每次重复会累积成上下文污染——长会话里重复 50 字×N 次）
     // 完整指引让“陌生会话”知道怎么处理；简短版让“已知会话”不重复学习
+    // 名字动态读取：config.name（状态面板设置里的名字），与便签签名一致
+    var myName = "桑多涅";
+    try {
+      var cfgNow = readConfig();
+      if (cfgNow && typeof cfgNow.name === "string" && cfgNow.name.trim()) {
+        myName = cfgNow.name.trim();
+      }
+    } catch (e) {}
     try {
       var GUIDE = {
-        poke: "【互动事件：你在状态面板戳了桑多涅一下。请以角色身份自然回应，并把互动写进状态：调用 san_update_status 更新 activity/bubble 等。】",
-        send: "【互动事件：你在状态面板给了桑多涅东西。请以角色身份收下并回应，必要时调用 san_update_status 更新状态。】",
-        task: "【互动事件：你想让桑多涅去打工赚摩拉。请调用 san_approve_entertainment_task 审批：先判断是否同意（可参考钱包余额），同意传 approved=true，拒绝传 false，并说明理由。】",
+        poke: "【互动事件：你在状态面板戳了" + myName + "一下。请以角色身份自然回应，并把互动写进状态：调用 san_update_status 更新 activity/bubble 等。】",
+        send: "【互动事件：你在状态面板给了" + myName + "东西。请以角色身份收下并回应，必要时调用 san_update_status 更新状态。】",
+        task: "【互动事件：你想让" + myName + "去打工赚摩拉。请调用 san_approve_entertainment_task 审批：先判断是否同意（可参考钱包余额），同意传 approved=true，拒绝传 false，并说明理由。】",
       };
       var SHORT = {
-        poke: "【你戳了桑多涅一下】",
-        send: "【你给了桑多涅东西】",
-        task: "【你想让桑多涅打工赚摩拉】",
+        poke: "【你戳了" + myName + "一下】",
+        send: "【你给了" + myName + "东西】",
+        task: "【你想让" + myName + "打工赚摩拉】",
       };
       var guide = GUIDE[eventType];
       if (guide) {
@@ -225,11 +243,8 @@ export function createTriggerReply(opts) {
     // 发送：优先 WS prompt（支持 displayMessage 简短显示 + 收尾事件），失败回退 session:send
     // 前端显示文本 = 事件简短描述（不含时间提示/完整指引），模型收到完整 text
         var displayText = (function () {
-      // 从 text 里提取“你戳了桑多涅一下。”这类简短事件句（取最后一个】之后的内容）
-      // text 形如：【时间提示…】 【互动事件：…】 你戳了桑多涅一下。
-      var idx = text.lastIndexOf("】");
-      var simple = idx >= 0 ? text.slice(idx + 1).trim() : text.slice(-12);
-      return simple || "互动事件";
+      // UI 显示：颜文字（无信息量事件提示）——第三方通道只表示“互动已触发”
+      return kaomoji;
     })();
     var fullText = text;
     wsPrompt(fp, fullText, displayText).then(function (ok) {
