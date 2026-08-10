@@ -368,7 +368,7 @@
     var names = p.names || [];
     var merged = mergeItems(names);
     var listTxt = merged.length ? merged.map(itemPhrase).join("、") : "些小东西";
-    var priceTxt = p.price != null ? Math.round(Number(p.price) || 0) + " 摩拉" : "没花钱";
+    var priceTxt = p.price != null ? fmtMora(p.price) + " 摩拉" : "没花钱";
     var isMe = p.by === "sandrone";
     var r = p.reason || "";
     var pick = function (arr) {
@@ -517,11 +517,16 @@
     );
   }
 
+  // ========== 摩拉格式化（保留最多两位小数，清浮点尾巴） ==========
+  function fmtMora(n) {
+    var v = Number(n) || 0;
+    return String(Math.round(v * 100) / 100);
+  }
+
   // ========== 摩拉余额（玩耍区右上角） ==========
   function renderWallet() {
-    // 摩拉取整显示：浮点精度（145.79999999999998）不暴露给用户
-    var v = Math.round(Number(state.mora) || 0);
-    if (moraCount) moraCount.textContent = v;
+    // 摩拉格式化显示：浮点精度（145.79999999999998）不暴露给用户
+    if (moraCount) moraCount.textContent = fmtMora(state.mora);
   }
 
   // ========== 学习区（书桌角：计时器） ==========
