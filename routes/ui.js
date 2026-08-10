@@ -686,7 +686,7 @@ export default function (app, ctx) {
       actions.push({ action: "poke", timestamp: nowStamp(), tsLocal: nowLocal() });
       if (actions.length > 50) actions = actions.slice(-50);
       fs.writeFileSync(actionsPath, JSON.stringify(actions, null, 2), "utf-8");
-      tryTriggerReply(c, "主人戳了你一下。", "poke");
+      tryTriggerReply(c, "你戳了桑多涅一下。", "poke");
       return c.json({ ok: true });
     } catch (e) {
       return c.json({ ok: false }, 500);
@@ -704,7 +704,7 @@ export default function (app, ctx) {
       actions.push({ action: "send", item: item, timestamp: nowStamp(), tsLocal: nowLocal() });
       if (actions.length > 50) actions = actions.slice(-50);
       fs.writeFileSync(actionsPath, JSON.stringify(actions, null, 2), "utf-8");
-      tryTriggerReply(c, "主人给了你 " + (item || "东西"), "send");
+      tryTriggerReply(c, "你给了桑多涅 " + (item || "东西"), "send");
       return c.json({ ok: true });
     } catch (e) {
       return c.json({ ok: false }, 500);

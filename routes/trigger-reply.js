@@ -117,14 +117,14 @@ export function createTriggerReply(opts) {
     // 完整指引让“陌生会话”知道怎么处理；简短版让“已知会话”不重复学习
     try {
       var GUIDE = {
-        poke: "【互动事件：主人在状态面板戳了你一下。请以角色身份自然回应，并把互动写进状态：调用 san_update_status 更新 activity/bubble 等。】",
-        send: "【互动事件：主人在状态面板给了你东西。请以角色身份收下并回应，必要时调用 san_update_status 更新状态。】",
-        task: "【互动事件：主人想让你去打工赚摩拉。请调用 san_approve_entertainment_task 审批：先判断是否同意（可参考钱包余额），同意传 approved=true，拒绝传 false，并说明理由。】",
+        poke: "【互动事件：你在状态面板戳了桑多涅一下。请以角色身份自然回应，并把互动写进状态：调用 san_update_status 更新 activity/bubble 等。】",
+        send: "【互动事件：你在状态面板给了桑多涅东西。请以角色身份收下并回应，必要时调用 san_update_status 更新状态。】",
+        task: "【互动事件：你想让桑多涅去打工赚摩拉。请调用 san_approve_entertainment_task 审批：先判断是否同意（可参考钱包余额），同意传 approved=true，拒绝传 false，并说明理由。】",
       };
       var SHORT = {
-        poke: "【主人戳了你一下】",
-        send: "【主人给了你东西】",
-        task: "【主人想让你打工赚摩拉】",
+        poke: "【你戳了桑多涅一下】",
+        send: "【你给了桑多涅东西】",
+        task: "【你想让桑多涅打工赚摩拉】",
       };
       var guide = GUIDE[eventType];
       if (guide) {
@@ -225,8 +225,8 @@ export function createTriggerReply(opts) {
     // 发送：优先 WS prompt（支持 displayMessage 简短显示 + 收尾事件），失败回退 session:send
     // 前端显示文本 = 事件简短描述（不含时间提示/完整指引），模型收到完整 text
         var displayText = (function () {
-      // 从 text 里提取“主人戳了你一下。”这类简短事件句（取最后一个】之后的内容）
-      // text 形如：【时间提示…】 【互动事件：…】 主人戳了你一下。
+      // 从 text 里提取“你戳了桑多涅一下。”这类简短事件句（取最后一个】之后的内容）
+      // text 形如：【时间提示…】 【互动事件：…】 你戳了桑多涅一下。
       var idx = text.lastIndexOf("】");
       var simple = idx >= 0 ? text.slice(idx + 1).trim() : text.slice(-12);
       return simple || "互动事件";

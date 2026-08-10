@@ -126,7 +126,7 @@ const tool = defineTool({
         return {
           content: [{
             type: "text",
-            text: "主人，摩拉不够了，还差 " + short + " 摩拉（共需 " + total + "）。要不去学习区学一会儿或者让我去打工赚点？",
+            text: "摩拉不够了，还差 " + short + " 摩拉（共需 " + total + "）。要不去学习区学一会儿或者让我去打工赚点？",
           }],
         };
       }
