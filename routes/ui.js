@@ -560,15 +560,20 @@ export default function (app, ctx) {
     }
   });
 
-  // ---- Agent 会话列表 ----
-  app.get("/api/agent-sessions", (c) => {
-    var cfg = readConfig();
+  // ---- Agent 会话列表（2026-08-14 改用宿主 session:list） ----
+  // 背景：旧实现自扫目录 + 用 路径/basename/首行UUID 查 session-titles.json，
+  //   而 Hana 的标题 key 是 manifest sessionId（sess_...），导致查不到 → 名字与 Hana 不一致、
+  //   重命名不同步。session:list 返回 Hana 已解析好的 title/firstMessage/agentName，天然一致且实时同步。
+  //   仅当宿主总线不可用（旧版 Hana）时回退旧的文件扫描实现。
+
+  // 旧实现（兜底）：自扫目录 + 读 session-titles.json
+  function scanAgentSessionsLegacy(cfg) {
     var groups = [];
     try {
       var ad = path.join(HANA_HOME, "agents");
       if (!fs.existsSync(ad)) {
         ctx.log?.warn?.("[状态面板] agents 目录不存在:", ad);
-        return c.json({ groups: groups });
+        return groups;
       }
       var entries = fs.readdirSync(ad, { withFileTypes: true });
       for (var i = 0; i < entries.length; i++) {
@@ -660,19 +665,103 @@ export default function (app, ctx) {
                 var tm = bn.match(/^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})/);
                 slabel = tm ? tm[1].replace(/T/, " ") : bn.slice(0, 16);
               }
-              var isActive = fp === cfg.targetSession || sid === cfg.targetSession || fp === cfg.targetSession;
+              var isActive = fp === cfg.targetSession;
               // 过滤 bridge/phone 会话（微信/QQ 等外部连接）：不在设置里显示
               // （2026-08-09 用户要求：外部连接的会话列表不需要展示）
               if (/bridge|phone/.test(fp)) continue;
-              var isBridge = false;
-              sessions.push({ id: fp, sid: sid, label: slabel, active: isActive, bridge: isBridge });
+              sessions.push({ id: fp, sid: sid, label: slabel, active: isActive, bridge: false });
             }
           }
         } catch (e) {}
         if (sessions.length > 0) groups.push({ agentId: aid, label: label, sessions: sessions });
       }
     } catch (e) {
-      ctx.log?.error?.("[状态面板] agent-sessions 异常:", e.message);
+      ctx.log?.error?.("[状态面板] agent-sessions 旧扫描异常:", e.message);
+    }
+    return groups;
+  }
+
+  // 会话显示名处理（2026-08-14）：单行化 + 截断 + 剔除系统注入前缀，
+  // 避免 firstMessage 兜底出现超长多行 / “[hana_reference]”式垃圾标签
+  function cleanLabelText(raw) {
+    if (!raw) return "";
+    var lines = String(raw).split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      var ln = lines[i].replace(/^\s+|\s+$/g, "").replace(/\s+/g, " ");
+      if (!ln) continue;
+      if (/^\[(hana_|SessionFile|system|tool|file)/i.test(ln)) continue; // 系统注入块
+      return ln;
+    }
+    return "";
+  }
+  function truncateLabel(s, n) {
+    return s.length > n ? s.slice(0, n) + "…" : s;
+  }
+  function sessionLabelFromBus(s) {
+    var raw = null;
+    if (s.title && String(s.title).trim()) raw = String(s.title).trim();
+    else raw = cleanLabelText(s.firstMessage);
+    if (raw) return truncateLabel(raw, 30);
+    var bn = path.basename(s.path || "");
+    var tm = bn.match(/^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})/);
+    return tm ? tm[1].replace(/T/, " ") : bn.slice(0, 16);
+  }
+
+  // 用宿主 session:list 的结果分组（标题/agent 名与 Hana 一致）
+  function groupSessionsFromBus(sessions, cfg) {
+    var groups = [];
+    var order = [];
+    var byAgent = {};
+    for (var i = 0; i < sessions.length; i++) {
+      var s = sessions[i];
+      var fp = s.path || "";
+      // 过滤 bridge/phone（2026-08-09 用户要求：外部连接会话不展示）
+      if (/bridge|phone/.test(fp)) continue;
+      var aid = s.agentId || "";
+      if (!byAgent[aid]) {
+        byAgent[aid] = { label: s.agentName || aid, sessions: [] };
+        order.push(aid);
+      }
+      byAgent[aid].sessions.push({
+        id: fp,
+        sid: s.sessionId || "",
+        label: sessionLabelFromBus(s),
+        active: fp === cfg.targetSession,
+        bridge: false,
+      });
+    }
+    for (var j = 0; j < order.length; j++) {
+      var g = byAgent[order[j]];
+      if (g.sessions.length > 0) groups.push({ agentId: order[j], label: g.label, sessions: g.sessions });
+    }
+    return groups;
+  }
+
+  app.get("/api/agent-sessions", async (c) => {
+    var cfg = readConfig();
+    var groups = [];
+    var errMsg = null;
+    try {
+      var pluginCtx = c.get("pluginCtx");
+      var bus = pluginCtx && pluginCtx.bus;
+      if (bus && typeof bus.request === "function") {
+        try {
+          var res = await bus.request("session:list", {});
+          var sessions = (res && Array.isArray(res.sessions)) ? res.sessions : [];
+          groups = groupSessionsFromBus(sessions, cfg);
+        } catch (e) {
+          // 总线调用失败（旧宿主/权限）→ 回退旧扫描
+          errMsg = "session:list 失败，回退旧扫描: " + (e && e.message ? e.message : e);
+          ctx.log?.warn?.("[状态面板]", errMsg);
+          groups = scanAgentSessionsLegacy(cfg);
+        }
+      } else {
+        // 无总线（旧版 Hana）→ 旧扫描
+        groups = scanAgentSessionsLegacy(cfg);
+      }
+    } catch (e) {
+      errMsg = e && e.message ? e.message : String(e);
+      ctx.log?.error?.("[状态面板] agent-sessions 异常:", errMsg);
     }
     ctx.log?.info?.("[状态面板] agent-sessions:", groups.length, "个 agent 组, 当前:", cfg.targetAgent || "(未选)");
     return c.json({ groups: groups, current: cfg.targetAgent || "" });

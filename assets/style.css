@@ -63,8 +63,15 @@ body {
   z-index: 0;
 }
 /* 对话流卡片场景：素净底色，不刺眼 */
+body[data-surface="card"] {
+  /* 外层不撑满视口：随内容收缩，避免紫色背景大片空白 */
+  min-height: 0;
+  height: auto;
+  background: transparent;
+}
 body[data-surface="card"] .panel-bg {
-  background: linear-gradient(160deg, #FBF7EE 0%, #F3EFE4 100%);
+  /* 不透明淡紫底色：body 已透明，这里直接给实底（模拟原透色效果） */
+  background: linear-gradient(160deg, #F6F0F8 0%, #EFE7F2 100%);
 }
 body[data-surface="card"] .panel {
   max-width: 420px;

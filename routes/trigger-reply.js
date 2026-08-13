@@ -4,7 +4,7 @@
 // 用法：
 //   import { createTriggerReply } from "./trigger-reply.js";
 //   const triggerReply = createTriggerReply({ dataDir, configPath, log });
-//   triggerReply(c, "主人戳了你一下。");
+//   triggerReply(c, "互动事件文本", "poke");
 import fs from "node:fs";
 import path from "node:path";
 
@@ -114,7 +114,7 @@ export function createTriggerReply(opts) {
     // UI 显示文本：无信息量颜文字池（按事件类型轮换，不替用户/角色说话）
     // 第三方事件提示定位：只表达“互动已触发”的情绪，不带语义负担
     var KAOMOJI = {
-      poke: ["ฅ(^•ﻌ•^)ฅ", "( ͡° ͜ʖ ͡°)", "(๑•̀ㅂ•́)و✧", "ヾ(￣▽￣)", "(*´∀`*)", "ヽ(・∀・)ﾉ"],
+      poke: ["ฅ(^•ﻌ•^)ฅ", "(๑•̀ㅂ•́)و✧", "ヾ(￣▽￣)", "(*´∀`*)", "ヽ(・∀・)ﾉ", "(๑´•ω•`๑)"],
       send: ["(っ˘ڡ˘ς)", "(๑´ڡ`๑)", "〜(꒪꒳꒪)〜", "(≧ڡ≦*)", "(￣ρ￣)", "(๑•̀ㅂ•́)و✧"],
       task: ["(・ω・)ノ", "(ง •̀_•́)ง", "٩(ˊᗜˋ*)و", "ヾ(≧▽≦*)o", "(๑•̀ㅂ•́)و✧", "ヽ(・∀・)ﾉ"],
     };
@@ -167,14 +167,12 @@ export function createTriggerReply(opts) {
     if (!pluginCtx || !pluginCtx.bus) return;
     var cfg = readConfig();
     var agentId = cfg.targetAgent || c.get("agentId") || null;
-    var fp = null;
-    // 1. 优先用配置里选中的会话（不再过滤 bridge/phone，让 Hana 决定）
-    if (cfg.targetSession) {
-      fp = cfg.targetSession;
-      if (!fs.existsSync(fp)) fp = null;
-    }
-    // 2. 回退到缓存（不再过滤 bridge/phone）
-    if (!fp) {
+    // 目标会话解析（2026-08-14 改为异步：优先宿主 session:list，路径/最新排序与 Hana 一致）
+    // 解析顺序：1) 配置选中的会话 → 2) 缓存 → 3) 宿主 session:list 最新桌面会话 → 4) 旧扫描兜底
+    function resolveFp() {
+      // 1. 优先用配置里选中的会话（不再过滤 bridge/phone，让 Hana 决定）
+      if (cfg.targetSession && fs.existsSync(cfg.targetSession)) return Promise.resolve(cfg.targetSession);
+      // 2. 回退到缓存
       try {
         var cache = path.join(dataDir, "session-info.json");
         if (fs.existsSync(cache)) {
@@ -183,77 +181,94 @@ export function createTriggerReply(opts) {
             si.sessionPath &&
             fs.existsSync(si.sessionPath) &&
             (!agentId || si.agentId === agentId)
-          ) fp = si.sessionPath;
+          ) return Promise.resolve(si.sessionPath);
         }
       } catch (e) {}
+      // 3. 宿主 session:list → 取该 agent 最新的桌面会话（避免全量递归扫盘）
+      if (agentId && pluginCtx.bus && typeof pluginCtx.bus.request === "function") {
+        return pluginCtx.bus.request("session:list", { agentId: agentId })
+          .then(function (res) {
+            var sessions = (res && Array.isArray(res.sessions)) ? res.sessions : [];
+            var list = sessions.filter(function (s) { return s.path && !/bridge|phone/.test(s.path); });
+            if (list.length === 0) return legacyLatest();
+            list.sort(function (a, b) { return new Date(b.modified || 0).getTime() - new Date(a.modified || 0).getTime(); });
+            return list[0].path;
+          })
+          .catch(function () { return legacyLatest(); });
+      }
+      // 4. 旧扫描兜底（仅当宿主 session:list 不可用时触发）
+      return Promise.resolve(legacyLatest());
     }
-    // 3. 再回退到扫描最新会话（递归找 bridge）
-    if (!fp && agentId) {
+    // 旧扫描兜底：递归找该 agent 最新会话
+    function legacyLatest() {
+      if (!agentId) return null;
       try {
         var sd = path.join(HANA_HOME, "agents", agentId, "sessions");
-        if (fs.existsSync(sd)) {
-          var all = [];
-          function walkSessions(d) {
-            try {
-              var items = fs.readdirSync(d, { withFileTypes: true });
-              for (var wi2 = 0; wi2 < items.length; wi2++) {
-                if (items[wi2].isDirectory()) {
-                  if (items[wi2].name === "archived") continue;
-                  walkSessions(path.join(d, items[wi2].name));
-                } else if (items[wi2].name.endsWith(".jsonl") && !items[wi2].name.startsWith("session-titles")) {
-                  all.push(path.join(d, items[wi2].name));
-                }
+        if (!fs.existsSync(sd)) return null;
+        var all = [];
+        function walkSessions(d) {
+          try {
+            var items = fs.readdirSync(d, { withFileTypes: true });
+            for (var wi2 = 0; wi2 < items.length; wi2++) {
+              if (items[wi2].isDirectory()) {
+                if (items[wi2].name === "archived") continue;
+                walkSessions(path.join(d, items[wi2].name));
+              } else if (items[wi2].name.endsWith(".jsonl") && !items[wi2].name.startsWith("session-titles")) {
+                all.push(path.join(d, items[wi2].name));
               }
-            } catch (e) {}
-          }
-          walkSessions(sd);
-          all.sort(function(a,b){ try { return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs; } catch(e){ return 0; } });
-          if (all.length > 0) fp = all[0];
+            }
+          } catch (e) {}
+        }
+        walkSessions(sd);
+        all.sort(function (a, b) { try { return fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs; } catch (e) { return 0; } });
+        return all.length > 0 ? all[0] : null;
+      } catch (e) { return null; }
+    }
+
+    resolveFp().then(function (fp) {
+      if (!fp) return;
+
+      // 补录：本次是否用了完整指引（决定下次是否走简短版）
+      // 只有当本次发送的是【完整指引】时才记录——简短版不覆盖记录（保持完整版已注入状态）
+      try {
+        var guideCache2 = path.join(dataDir, "guide-tags.json");
+        var guideMap2 = {};
+        try { if (fs.existsSync(guideCache2)) guideMap2 = JSON.parse(fs.readFileSync(guideCache2, "utf-8")); } catch (e) {}
+        var today2 = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+        // 前面决定 useShort 时已经读过缓存；这里在 fp 确定后，若本次用的是完整版则写入
+        // （用简短版时不写——因为完整版已注入过的标记应该保持）
+        if (guideMap2[fp] !== today2 && text.indexOf("互动事件：") >= 0) {
+          guideMap2[fp] = today2;
+          try { fs.writeFileSync(guideCache2, JSON.stringify(guideMap2), "utf-8"); } catch (e) {}
         }
       } catch (e) {}
-    }
-    if (!fp) return;
 
-    // 补录：本次是否用了完整指引（决定下次是否走简短版）
-    // 只有当本次发送的是【完整指引】时才记录——简短版不覆盖记录（保持完整版已注入状态）
-    try {
-      var guideCache2 = path.join(dataDir, "guide-tags.json");
-      var guideMap2 = {};
-      try { if (fs.existsSync(guideCache2)) guideMap2 = JSON.parse(fs.readFileSync(guideCache2, "utf-8")); } catch (e) {}
-      var today2 = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
-      // 前面决定 useShort 时已经读过缓存；这里在 fp 确定后，若本次用的是完整版则写入
-      // （用简短版时不写——因为完整版已注入过的标记应该保持）
-      if (guideMap2[fp] !== today2 && text.indexOf("互动事件：") >= 0) {
-        guideMap2[fp] = today2;
-        try { fs.writeFileSync(guideCache2, JSON.stringify(guideMap2), "utf-8"); } catch (e) {}
-      }
-    } catch (e) {}
+      // 时间策略（2026-08-08 优化）：不再注入具体时间戳，改为指引模型用 current_status 实时查
+      // 原因：注入时间会写入会话 → 累积污染上下文 + 过期误导（旧时间被当现在）
+      // current_status 实时查询：零污染、永远最新，用完即弃
+      // 只保留“事件锚点”语义：告诉模型这是互动事件，判断时间请用实时工具
+      try {
+        var timeGuide = "【时间提示：判断当前时间/日期请调用 current_status 实时查询，勿参考本会话历史中的旧时间】";
+        text = timeGuide + " " + text;
+        // 清理旧的时间标签缓存（不再使用，避免残留）
+        try { var oldTag = path.join(dataDir, "time-tags.json"); if (fs.existsSync(oldTag)) fs.unlinkSync(oldTag); } catch (e) {}
+      } catch (e) {}
 
-    // 时间策略（2026-08-08 优化）：不再注入具体时间戳，改为指引模型用 current_status 实时查
-    // 原因：注入时间会写入会话 → 累积污染上下文 + 过期误导（旧时间被当现在）
-    // current_status 实时查询：零污染、永远最新，用完即弃
-    // 只保留“事件锚点”语义：告诉模型这是互动事件，判断时间请用实时工具
-    try {
-      var timeGuide = "【时间提示：判断当前时间/日期请调用 current_status 实时查询，勿参考本会话历史中的旧时间】";
-      text = timeGuide + " " + text;
-      // 清理旧的时间标签缓存（不再使用，避免残留）
-      try { var oldTag = path.join(dataDir, "time-tags.json"); if (fs.existsSync(oldTag)) fs.unlinkSync(oldTag); } catch (e) {}
-    } catch (e) {}
-
-    // 发送：优先 WS prompt（支持 displayMessage 简短显示 + 收尾事件），失败回退 session:send
-    // 前端显示文本 = 事件简短描述（不含时间提示/完整指引），模型收到完整 text
-        var displayText = (function () {
-      // UI 显示：颜文字（无信息量事件提示）——第三方通道只表示“互动已触发”
-      return kaomoji;
-    })();
-    var fullText = text;
-    wsPrompt(fp, fullText, displayText).then(function (ok) {
-      if (ok) {
-        log?.info?.("[状态面板] 互动消息已发送 (WS):", fp);
-      } else {
-        log?.warn?.("[状态面板] WS 失败，回退 session:send");
-        sendFallback(pluginCtx.bus, fp, fullText);
-      }
+      // 发送：优先 WS prompt（支持 displayMessage 简短显示 + 收尾事件），失败回退 session:send
+      // 前端显示文本 = 事件简短描述（不含时间提示/完整指引），模型收到完整 text
+      var displayText = (function () {
+        // UI 显示：颜文字（无信息量事件提示）——第三方通道只表示“互动已触发”
+        return kaomoji;
+      })();
+      var fullText = text;
+      wsPrompt(fp, fullText, displayText).then(function (ok) {
+        if (ok) {
+          log?.info?.("[状态面板] 互动消息已发送 (WS):", fp);
+        } else {
+          log?.warn?.("[状态面板] WS 失败，回退 session:send");
+          sendFallback(pluginCtx.bus, fp, fullText);
+        }
+      });
     });
   };
 }
